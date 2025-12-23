@@ -13,3 +13,5 @@
 .externalNativeBuild
 .cxx
 local.properties
+# Ignore any folder with this name anywhere in the project
+**/sherpa-onnx-fire-red-asr-large-zh_en-2025-02-16/
