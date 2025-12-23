@@ -33,6 +33,7 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
 import kotlin.concurrent.thread
+import kotlin.math.min
 
 
 private const val TAG = "sherpa-onnx"
@@ -276,14 +277,65 @@ class MainActivity : AppCompatActivity() {
                 // Decode the WAV file to get the audio samples
                 val samples = decodeWavFile(audioFile)
 
-                // Process the samples using the offline recognizer
-                val text = runSecondPass(samples)
-
-                runOnUiThread {
-                    lastText = "${lastText}\n音频文件识别结果: ${text}"
-                    idx += 1
-                    textView.append("\n音频文件识别结果: ${text}")
+                // Use VAD to split the audio into segments and process each segment
+                vad.reset()
+                
+                // Process the samples in chunks, similar to how real-time recording works
+                val chunkSize = 512 // Use the same buffer size as in processSamples
+                var startIndex = 0
+                
+                while (startIndex < samples.size) {
+                    val endIndex = kotlin.math.min(startIndex + chunkSize, samples.size)
+                    val chunk = samples.copyOfRange(startIndex, endIndex)
+                    
+                    vad.acceptWaveform(chunk)
+                    
+                    // Process any available segments immediately
+                    while (!vad.empty()) {
+                        val segment = vad.front()
+                        val text = runSecondPass(segment.samples)
+                        if (text.isNotBlank()) {
+                            // Add a period to the end of the text if it doesn't already have one
+                            val formattedText = if (text.endsWith('.') || text.endsWith('。') || text.endsWith('!') || text.endsWith('?') || text.endsWith('！') || text.endsWith('？')) {
+                                text
+                            } else {
+                                "$text。"
+                            }
+                            runOnUiThread {
+                                lastText = "${lastText}\n音频文件识别结果: $formattedText"
+                                idx += 1
+                                textView.append("\n音频文件识别结果: $formattedText")
+                            }
+                        }
+                        vad.pop()
+                    }
+                    
+                    startIndex = endIndex
                 }
+                
+                // Flush any remaining samples
+                vad.flush()
+                
+                // Process any remaining segments after flushing
+                while (!vad.empty()) {
+                    val segment = vad.front()
+                    val text = runSecondPass(segment.samples)
+                    if (text.isNotBlank()) {
+                        // Add a period to the end of the text if it doesn't already have one
+                        val formattedText = if (text.endsWith('.') || text.endsWith('。') || text.endsWith('!') || text.endsWith('?') || text.endsWith('！') || text.endsWith('？')) {
+                            text
+                        } else {
+                            "$text。"
+                        }
+                        runOnUiThread {
+                            lastText = "${lastText}\n音频文件识别结果: $formattedText"
+                            idx += 1
+                            textView.append("\n音频文件识别结果: $formattedText")
+                        }
+                    }
+                    vad.pop()
+                }
+
             } catch (e: Exception) {
                 Log.e(TAG, "Error processing audio file: ${e.message}", e)
                 runOnUiThread {
