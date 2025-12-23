@@ -210,7 +210,7 @@ class MainActivity : AppCompatActivity() {
         val originalAudioPath = getRealPathFromURI(uri)
 
         // Create temporary output file for converted audio
-        val outputAudioFile = File(filesDir, "converted_audio.wav")
+        val outputAudioFile = File(filesDir, "converted_audio_${System.currentTimeMillis().toString()}.wav")
         val outputAudioPath = outputAudioFile.absolutePath
 
         // Use FFmpeg to convert the audio to 16kHz WAV
@@ -278,11 +278,11 @@ class MainActivity : AppCompatActivity() {
 
                 // Process the samples using the offline recognizer
                 val text = runSecondPass(samples)
-                
+
                 runOnUiThread {
                     lastText = "${lastText}\n音频文件识别结果: ${text}"
                     idx += 1
-                    textView.text = lastText.lowercase()
+                    textView.append("\n音频文件识别结果: ${text}")
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error processing audio file: ${e.message}", e)
