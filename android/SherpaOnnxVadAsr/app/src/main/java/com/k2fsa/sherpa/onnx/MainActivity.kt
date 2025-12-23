@@ -1,10 +1,13 @@
 package com.k2fsa.sherpa.onnx.vad.asr
 
 import android.Manifest
+import android.app.Activity
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
+import android.net.Uri
 import android.os.Bundle
 import android.text.method.ScrollingMovementMethod
 import android.util.Log
@@ -12,6 +15,9 @@ import android.widget.Button
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
+import com.arthenica.ffmpegkit.FFmpegKit
+import com.arthenica.ffmpegkit.ReturnCode
 import com.k2fsa.sherpa.onnx.OfflineRecognizer
 import com.k2fsa.sherpa.onnx.OfflineRecognizerConfig
 import com.k2fsa.sherpa.onnx.R
@@ -24,15 +30,20 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
+import java.io.FileOutputStream
 import kotlin.concurrent.thread
 
 
 private const val TAG = "sherpa-onnx"
 private const val REQUEST_RECORD_AUDIO_PERMISSION = 200
+private const val REQUEST_READ_AUDIO_PERMISSION = 201
+private const val REQUEST_SELECT_AUDIO_FILE = 202
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var recordButton: Button
+    private lateinit var selectAudioButton: Button
     private lateinit var textView: TextView
 
     private lateinit var vad: Vad
@@ -48,7 +59,11 @@ class MainActivity : AppCompatActivity() {
     // but we are targeting API level >= 21
     private val audioFormat = AudioFormat.ENCODING_PCM_16BIT
 
-    private val permissions: Array<String> = arrayOf(Manifest.permission.RECORD_AUDIO)
+    private val permissions: Array<String> = arrayOf(
+        Manifest.permission.RECORD_AUDIO,
+        Manifest.permission.READ_EXTERNAL_STORAGE,
+        Manifest.permission.READ_MEDIA_AUDIO
+    )
 
     // Non-streaming ASR
     private lateinit var offlineRecognizer: OfflineRecognizer
@@ -59,23 +74,7 @@ class MainActivity : AppCompatActivity() {
     @Volatile
     private var isRecording: Boolean = false
 
-    override fun onRequestPermissionsResult(
-        requestCode: Int, permissions: Array<String>, grantResults: IntArray
-    ) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        val permissionToRecordAccepted = if (requestCode == REQUEST_RECORD_AUDIO_PERMISSION) {
-            grantResults[0] == PackageManager.PERMISSION_GRANTED
-        } else {
-            false
-        }
 
-        if (!permissionToRecordAccepted) {
-            Log.e(TAG, "Audio record is disallowed")
-            finish()
-        }
-
-        Log.i(TAG, "Audio record is permitted")
-    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -93,6 +92,9 @@ class MainActivity : AppCompatActivity() {
 
         recordButton = findViewById(R.id.record_button)
         recordButton.setOnClickListener { onclick() }
+
+        selectAudioButton = findViewById(R.id.select_audio_button)
+        selectAudioButton.setOnClickListener { onSelectAudioClick() }
 
         textView = findViewById(R.id.my_text)
         textView.movementMethod = ScrollingMovementMethod()
@@ -129,6 +131,226 @@ class MainActivity : AppCompatActivity() {
             recordButton.setText(R.string.start)
             Log.i(TAG, "Stopped recording")
         }
+    }
+
+    private fun onSelectAudioClick() {
+        // Check permission for reading audio files
+        if (ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.READ_MEDIA_AUDIO
+            ) != PackageManager.PERMISSION_GRANTED &&
+            ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.READ_EXTERNAL_STORAGE
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            ActivityCompat.requestPermissions(
+                this,
+                arrayOf(
+                    Manifest.permission.READ_MEDIA_AUDIO,
+                    Manifest.permission.READ_EXTERNAL_STORAGE
+                ),
+                REQUEST_READ_AUDIO_PERMISSION
+            )
+        } else {
+            openFilePicker()
+        }
+    }
+
+    private fun openFilePicker() {
+        val intent = Intent(Intent.ACTION_GET_CONTENT).apply {
+            type = "audio/*"
+            addCategory(Intent.CATEGORY_OPENABLE)
+        }
+        startActivityForResult(intent, REQUEST_SELECT_AUDIO_FILE)
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<String>,
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        when (requestCode) {
+            REQUEST_RECORD_AUDIO_PERMISSION -> {
+                val permissionToRecordAccepted = grantResults[0] == PackageManager.PERMISSION_GRANTED
+                if (!permissionToRecordAccepted) {
+                    Log.e(TAG, "Audio record is disallowed")
+                    finish()
+                }
+                Log.i(TAG, "Audio record is permitted")
+            }
+            REQUEST_READ_AUDIO_PERMISSION -> {
+                val readAudioPermissionGranted = grantResults[0] == PackageManager.PERMISSION_GRANTED
+                if (readAudioPermissionGranted) {
+                    openFilePicker()
+                } else {
+                    Log.e(TAG, "Read audio permission is disallowed")
+                }
+            }
+        }
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == REQUEST_SELECT_AUDIO_FILE && resultCode == Activity.RESULT_OK) {
+            data?.data?.let { uri ->
+                processSelectedAudio(uri)
+            }
+        }
+    }
+
+    private fun processSelectedAudio(uri: Uri) {
+        // Show processing message
+        runOnUiThread {
+            textView.append("\n正在处理音频文件...")
+        }
+
+        // Get the original audio file path
+        val originalAudioPath = getRealPathFromURI(uri)
+
+        // Create temporary output file for converted audio
+        val outputAudioFile = File(filesDir, "converted_audio.wav")
+        val outputAudioPath = outputAudioFile.absolutePath
+
+        // Use FFmpeg to convert the audio to 16kHz WAV
+        val ffmpegCommand = "-i \"${originalAudioPath}\" -ar 16000 -ac 1 -c:a pcm_s16le \"${outputAudioPath}\""
+
+        FFmpegKit.executeAsync(ffmpegCommand) { session ->
+            val returnCode = session.getReturnCode()
+
+            if (ReturnCode.isSuccess(returnCode)) {
+                Log.i(TAG, "Audio converted successfully to 16kHz WAV")
+                // Process the converted audio file
+                runOnUiThread {
+                    textView.append("\n音频转换完成，正在识别...")
+                }
+                recognizeAudioFile(outputAudioPath)
+            } else {
+                Log.e(TAG, "FFmpeg command failed: ${session.getFailStackTrace()}")
+                runOnUiThread {
+                    textView.append("\n音频转换失败: ${session.getFailStackTrace()}")
+                }
+            }
+        }
+    }
+
+    private fun getRealPathFromURI(uri: Uri): String {
+        // For Android 10+, we need to copy the file to app's private storage
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+            val inputStream = contentResolver.openInputStream(uri)
+            val outputFile = File(filesDir, "temp_audio_file")
+            val outputStream = FileOutputStream(outputFile)
+            
+            inputStream?.use { input ->
+                outputStream.use { output ->
+                    input.copyTo(output)
+                }
+            }
+            
+            return outputFile.absolutePath
+        } else {
+            // For older versions, try to get the real path
+            val projection = arrayOf(android.provider.MediaStore.Audio.Media.DATA)
+            val cursor = contentResolver.query(uri, projection, null, null, null)
+            cursor?.use {
+                if (it.moveToFirst()) {
+                    val columnIndex = it.getColumnIndex(android.provider.MediaStore.Audio.Media.DATA)
+                    return it.getString(columnIndex)
+                }
+            }
+            return uri.path ?: ""
+        }
+    }
+
+    private fun recognizeAudioFile(audioFilePath: String) {
+        Thread {
+            try {
+                // Read the converted WAV file
+                val audioFile = File(audioFilePath)
+                if (!audioFile.exists()) {
+                    Log.e(TAG, "Audio file does not exist: $audioFile")
+                    return@Thread
+                }
+
+                // Decode the WAV file to get the audio samples
+                val samples = decodeWavFile(audioFile)
+
+                // Process the samples using the offline recognizer
+                val text = runSecondPass(samples)
+                
+                runOnUiThread {
+                    lastText = "${lastText}\n音频文件识别结果: ${text}"
+                    idx += 1
+                    textView.text = lastText.lowercase()
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error processing audio file: ${e.message}", e)
+                runOnUiThread {
+                    textView.append("\n处理音频文件时出错: ${e.message}")
+                }
+            }
+        }.start()
+    }
+
+    private fun decodeWavFile(wavFile: File): FloatArray {
+        // Read WAV file header and extract audio samples
+        val fileBytes = wavFile.readBytes()
+        
+        // WAV file format: RIFF header (12 bytes) + fmt chunk (24 bytes) + data chunk header (8 bytes) + audio data
+        // Skip the RIFF header (12 bytes)
+        var offset = 12
+        
+        // Skip fmt chunk (usually 24 bytes total: "fmt " + 4 + 16 + format data)
+        val fmtChunkSize = ((fileBytes[offset + 7].toInt() and 0xFF) shl 24) or
+                ((fileBytes[offset + 6].toInt() and 0xFF) shl 16) or
+                ((fileBytes[offset + 5].toInt() and 0xFF) shl 8) or
+                (fileBytes[offset + 4].toInt() and 0xFF)
+        offset += 8 + fmtChunkSize // Skip fmt chunk header + data
+        
+        // Find data chunk
+        while (offset < fileBytes.size - 4) {
+            val chunkId = String(
+                byteArrayOf(
+                    fileBytes[offset],
+                    fileBytes[offset + 1],
+                    fileBytes[offset + 2],
+                    fileBytes[offset + 3]
+                )
+            )
+            
+            if (chunkId == "data") {
+                offset += 4 // Skip "data" id
+                val dataSize = ((fileBytes[offset + 3].toInt() and 0xFF) shl 24) or
+                        ((fileBytes[offset + 2].toInt() and 0xFF) shl 16) or
+                        ((fileBytes[offset + 1].toInt() and 0xFF) shl 8) or
+                        (fileBytes[offset].toInt() and 0xFF)
+                offset += 4 // Skip data size
+                
+                // Read audio samples (assuming 16-bit PCM)
+                val numSamples = dataSize / 2
+                val samples = FloatArray(numSamples)
+                
+                for (i in 0 until numSamples) {
+                    val sample = (fileBytes[offset + i * 2 + 1].toInt() shl 8) or
+                            (fileBytes[offset + i * 2].toInt() and 0xFF)
+                    // Convert to signed 16-bit and then to float
+                    val signedSample = if (sample > 32767) sample - 65536 else sample
+                    samples[i] = signedSample / 32768.0f
+                }
+                
+                return samples
+            } else {
+                // Skip this chunk
+                val chunkSize = ((fileBytes[offset + 7].toInt() and 0xFF) shl 24) or
+                        ((fileBytes[offset + 6].toInt() and 0xFF) shl 16) or
+                        ((fileBytes[offset + 5].toInt() and 0xFF) shl 8) or
+                        (fileBytes[offset + 4].toInt() and 0xFF)
+                offset += 8 + chunkSize
+            }
+        }
+        
+        throw Exception("Could not find data chunk in WAV file")
     }
 
     private  fun initVadModel() {
