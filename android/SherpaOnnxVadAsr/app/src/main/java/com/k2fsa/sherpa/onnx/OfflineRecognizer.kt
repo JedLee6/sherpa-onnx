@@ -94,7 +94,7 @@ data class OfflineModelConfig(
     var omnilingual: OfflineOmnilingualAsrCtcModelConfig = OfflineOmnilingualAsrCtcModelConfig(),
     var canary: OfflineCanaryModelConfig = OfflineCanaryModelConfig(),
     var teleSpeech: String = "",
-    var numThreads: Int = 1,
+    var numThreads: Int = 4,
     var debug: Boolean = false,
     var provider: String = "cpu",
     var modelType: String = "",
