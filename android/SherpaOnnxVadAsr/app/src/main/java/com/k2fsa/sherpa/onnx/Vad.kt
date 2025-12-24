@@ -121,7 +121,7 @@ fun getVadModelConfig(type: Int): VadModelConfig? {
                 //refer to https://nosub.net/posts/p/260
                 sileroVadModelConfig = SileroVadModelConfig(
                     model = "silero_vad.onnx",
-                    threshold = 0.05F,
+                    threshold = 0.5F,
                     minSilenceDuration = 0.1F,
                     minSpeechDuration = 0.1F,
                     windowSize = 512,
