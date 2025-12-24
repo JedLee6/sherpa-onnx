@@ -290,13 +290,13 @@ class MainActivity : AppCompatActivity() {
             val inputStream = contentResolver.openInputStream(uri)
             val outputFile = File(filesDir, "temp_audio_file")
             val outputStream = FileOutputStream(outputFile)
-            
+
             inputStream?.use { input ->
                 outputStream.use { output ->
                     input.copyTo(output)
                 }
             }
-            
+
             return outputFile.absolutePath
         } else {
             // For older versions, try to get the real path
@@ -317,7 +317,7 @@ class MainActivity : AppCompatActivity() {
             try {
                 // 记录开始时间
                 val startTime = System.currentTimeMillis()
-                
+
                 // Read the converted WAV file
                 val audioFile = File(audioFilePath)
                 if (!audioFile.exists()) {
@@ -330,21 +330,21 @@ class MainActivity : AppCompatActivity() {
 
                 // Use VAD to split the audio into segments and process each segment
                 vad.reset()
-                
+
                 // Process the samples in chunks, similar to how real-time recording works
                 val chunkSize = 512 // Use the same buffer size as in processSamples
                 var startIndex = 0
-                
+
                 // 计算总块数用于进度计算
                 val totalChunks = kotlin.math.ceil(samples.size.toDouble() / chunkSize).toInt()
                 var processedChunks = 0
-                
+
                 while (startIndex < samples.size) {
                     val endIndex = kotlin.math.min(startIndex + chunkSize, samples.size)
                     val chunk = samples.copyOfRange(startIndex, endIndex)
-                    
+
                     vad.acceptWaveform(chunk)
-                    
+
                     // Process any available segments immediately
                     while (!vad.empty()) {
                         val segment = vad.front()
@@ -370,14 +370,14 @@ class MainActivity : AppCompatActivity() {
                         }
                         vad.pop()
                     }
-                    
+
                     startIndex = endIndex
                     processedChunks++
                 }
-                
+
                 // Flush any remaining samples
                 vad.flush()
-                
+
                 // Process any remaining segments after flushing
                 while (!vad.empty()) {
                     val segment = vad.front()
@@ -421,7 +421,7 @@ class MainActivity : AppCompatActivity() {
     private fun decodeWavFile(wavFile: File): FloatArray {
         // Read WAV file header and extract audio samples
         val fileBytes = wavFile.readBytes()
-        
+
         // WAV file format: RIFF header (12 bytes) + fmt chunk (24 bytes) + data chunk header (8 bytes) + audio data
         // Skip the RIFF header (12 bytes)
         var offset = 12
@@ -432,7 +432,7 @@ class MainActivity : AppCompatActivity() {
                 ((fileBytes[offset + 5].toInt() and 0xFF) shl 8) or
                 (fileBytes[offset + 4].toInt() and 0xFF)
         offset += 8 + fmtChunkSize // Skip fmt chunk header + data
-        
+
         // Find data chunk
         while (offset < fileBytes.size - 4) {
             val chunkId = String(
@@ -443,7 +443,7 @@ class MainActivity : AppCompatActivity() {
                     fileBytes[offset + 3]
                 )
             )
-            
+
             if (chunkId == "data") {
                 offset += 4 // Skip "data" id
                 val dataSize = ((fileBytes[offset + 3].toInt() and 0xFF) shl 24) or
@@ -451,11 +451,11 @@ class MainActivity : AppCompatActivity() {
                         ((fileBytes[offset + 1].toInt() and 0xFF) shl 8) or
                         (fileBytes[offset].toInt() and 0xFF)
                 offset += 4 // Skip data size
-                
+
                 // Read audio samples (assuming 16-bit PCM)
                 val numSamples = dataSize / 2
                 val samples = FloatArray(numSamples)
-                
+
                 for (i in 0 until numSamples) {
                     val sample = (fileBytes[offset + i * 2 + 1].toInt() shl 8) or
                             (fileBytes[offset + i * 2].toInt() and 0xFF)
@@ -463,7 +463,7 @@ class MainActivity : AppCompatActivity() {
                     val signedSample = if (sample > 32767) sample - 65536 else sample
                     samples[i] = signedSample / 32768.0f
                 }
-                
+
                 return samples
             } else {
                 // Skip this chunk
@@ -474,7 +474,7 @@ class MainActivity : AppCompatActivity() {
                 offset += 8 + chunkSize
             }
         }
-        
+
         throw Exception("Could not find data chunk in WAV file")
     }
 
@@ -582,9 +582,10 @@ class MainActivity : AppCompatActivity() {
             config = config,
         )
     }
-    
+
     private fun initOfflineRecognizerAsync() {
         Thread {
+            val startTime = System.currentTimeMillis() // 记录开始时间
             try {
                 // Please change getOfflineModelConfig() to add new models
                 // See https://k2-fsa.github.io/sherpa/onnx/pretrained_models/index.html
@@ -609,15 +610,20 @@ class MainActivity : AppCompatActivity() {
                     config = config,
                 )
 
-                // 在主线程显示加载成功的Toast
+                val endTime = System.currentTimeMillis() // 记录结束时间
+                val duration = endTime - startTime // 计算耗时
+
+                // 在主线程显示加载成功的Toast，包含耗时信息
                 runOnUiThread {
-                    textView.append("\nASR模型加载成功")
-                    Toast.makeText(this, "ASR模型加载成功", Toast.LENGTH_SHORT).show()
+                    textView.append("\nASR模型加载成功 (耗时: ${duration}ms)")
+                    Toast.makeText(this, "ASR模型加载成功 (耗时: ${duration}ms)", Toast.LENGTH_SHORT).show()
                 }
             } catch (e: Exception) {
+                val endTime = System.currentTimeMillis() // 记录结束时间
+                val duration = endTime - startTime // 计算耗时
                 Log.e(TAG, "Error initializing offline recognizer: ${e.message}", e)
                 runOnUiThread {
-                    Toast.makeText(this, "ASR模型加载失败: ${e.message}", Toast.LENGTH_LONG).show()
+                    Toast.makeText(this, "ASR模型加载失败 (耗时: ${duration}ms): ${e.message}", Toast.LENGTH_LONG).show()
                 }
             }
         }.start()
@@ -641,20 +647,20 @@ class MainActivity : AppCompatActivity() {
     private fun addPaddingToSegment(samples: FloatArray, paddingDurationSeconds: Float = 0.5F): FloatArray {
         val paddingSamplesCount = (sampleRateInHz * paddingDurationSeconds).toInt()
         val paddedSamples = FloatArray(samples.size + paddingSamplesCount * 2) // 前后各添加padding
-        
+
         // 填充开头的静音（0值）
         for (i in 0 until paddingSamplesCount) {
             paddedSamples[i] = 0.0f
         }
-        
+
         // 复制原始样本到中间部分
         System.arraycopy(samples, 0, paddedSamples, paddingSamplesCount, samples.size)
-        
+
         // 填充末尾的静音（0值）
         for (i in (samples.size + paddingSamplesCount) until paddedSamples.size) {
             paddedSamples[i] = 0.0f
         }
-        
+
         return paddedSamples
     }
 
@@ -673,13 +679,13 @@ class MainActivity : AppCompatActivity() {
         // 计算0.09秒和0.3秒对应的采样点数
         val audioPaddingSamplesCount = (sampleRateInHz * 0.09f).toInt()
         val silencePaddingSamplesCount = (sampleRateInHz * 0.3f).toInt()
-        
+
         // 计算最终数组大小：原始段 + 前后音频padding + 前后静音padding
         val totalPaddingSize = (audioPaddingSamplesCount + silencePaddingSamplesCount) * 2
         val paddedSamples = FloatArray(segmentSamples.size + totalPaddingSize)
-        
+
         var currentIndex = 0
-        
+
         // 1. 添加头部0.09秒实际音频内容
         val startAudioPaddingStartIndex = maxOf(0, segmentStartIndex - audioPaddingSamplesCount)
         val actualAudioPaddingSize = minOf(audioPaddingSamplesCount, segmentStartIndex)
@@ -693,7 +699,7 @@ class MainActivity : AppCompatActivity() {
             )
             currentIndex += actualAudioPaddingSize
         }
-        
+
         // 如果实际音频不够0.09秒，则用静音填充剩余部分
         if (actualAudioPaddingSize < audioPaddingSamplesCount) {
             val silenceFillCount = audioPaddingSamplesCount - actualAudioPaddingSize
@@ -702,29 +708,29 @@ class MainActivity : AppCompatActivity() {
             }
             currentIndex += silenceFillCount
         }
-        
+
         // 2. 添加头部0.3秒静音
         for (i in 0 until silencePaddingSamplesCount) {
             paddedSamples[currentIndex + i] = 0.0f
         }
         currentIndex += silencePaddingSamplesCount
-        
+
         // 3. 复制原始语音段
         System.arraycopy(segmentSamples, 0, paddedSamples, currentIndex, segmentSamples.size)
         currentIndex += segmentSamples.size
-        
+
         // 4. 添加尾部0.3秒静音
         for (i in 0 until silencePaddingSamplesCount) {
             paddedSamples[currentIndex + i] = 0.0f
         }
         currentIndex += silencePaddingSamplesCount
-        
+
         // 5. 添加尾部0.09秒实际音频内容
         val segmentEndIndex = segmentStartIndex + segmentSamples.size
         val endAudioPaddingStartIndex = minOf(originalSamples.size - 1, segmentEndIndex)
         val endAudioPaddingEndIndex = minOf(originalSamples.size, segmentEndIndex + audioPaddingSamplesCount)
         val endAudioActualSize = endAudioPaddingEndIndex - endAudioPaddingStartIndex
-        
+
         if (endAudioActualSize > 0) {
             System.arraycopy(
                 originalSamples,
@@ -734,7 +740,7 @@ class MainActivity : AppCompatActivity() {
                 endAudioActualSize
             )
             currentIndex += endAudioActualSize
-            
+
             // 如果实际音频不够0.09秒，则用静音填充剩余部分
             if (endAudioActualSize < audioPaddingSamplesCount) {
                 val silenceFillCount = audioPaddingSamplesCount - endAudioActualSize
@@ -743,7 +749,7 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
-        
+
         return paddedSamples
     }
 }
