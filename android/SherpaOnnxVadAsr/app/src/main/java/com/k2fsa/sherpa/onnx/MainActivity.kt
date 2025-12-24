@@ -293,7 +293,9 @@ class MainActivity : AppCompatActivity() {
                     // Process any available segments immediately
                     while (!vad.empty()) {
                         val segment = vad.front()
-                        val text = runSecondPass(segment.samples)
+                        // 为语音段添加末尾padding，避免句子末尾丢字问题
+                        val paddedSamples = addPaddingToSegment(segment.samples)
+                        val text = runSecondPass(paddedSamples)
                         if (text.isNotBlank()) {
                             // Add a period to the end of the text if it doesn't already have one
                             val formattedText = if (text.endsWith('.') || text.endsWith('。') || text.endsWith('!') || text.endsWith('?') || text.endsWith('！') || text.endsWith('？')) {
@@ -319,7 +321,9 @@ class MainActivity : AppCompatActivity() {
                 // Process any remaining segments after flushing
                 while (!vad.empty()) {
                     val segment = vad.front()
-                    val text = runSecondPass(segment.samples)
+                    // 为语音段添加末尾padding，避免句子末尾丢字问题
+                    val paddedSamples = addPaddingToSegment(segment.samples)
+                    val text = runSecondPass(paddedSamples)
                     if (text.isNotBlank()) {
                         // Add a period to the end of the text if it doesn't already have one
                         val formattedText = if (text.endsWith('.') || text.endsWith('。') || text.endsWith('!') || text.endsWith('?') || text.endsWith('！') || text.endsWith('？')) {
@@ -456,8 +460,10 @@ class MainActivity : AppCompatActivity() {
                 vad.acceptWaveform(samples)
                 while(!vad.empty()) {
                     var segment = vad.front()
+                    // 为语音段添加末尾padding，避免句子末尾丢字问题
+                    val paddedSamples = addPaddingToSegment(segment.samples)
                     coroutineScope.launch {
-                        val text = runSecondPass(segment.samples)
+                        val text = runSecondPass(paddedSamples)
                         if (text.isNotBlank()) {
                             withContext(Dispatchers.Main) {
                                 lastText = "${lastText}\n${idx}: ${text}"
@@ -513,5 +519,31 @@ class MainActivity : AppCompatActivity() {
         val result = offlineRecognizer.getResult(stream)
         stream.release()
         return result.text
+    }
+
+    /**
+     * 为语音段添加首尾padding，避免句子首尾丢字问题
+     * @param samples 原始语音样本
+     * @param paddingDurationSeconds 需要添加的padding时长（秒）
+     * @return 添加padding后的语音样本
+     */
+    private fun addPaddingToSegment(samples: FloatArray, paddingDurationSeconds: Float = 0.5F): FloatArray {
+        val paddingSamplesCount = (sampleRateInHz * paddingDurationSeconds).toInt()
+        val paddedSamples = FloatArray(samples.size + paddingSamplesCount * 2) // 前后各添加padding
+        
+        // 填充开头的静音（0值）
+        for (i in 0 until paddingSamplesCount) {
+            paddedSamples[i] = 0.0f
+        }
+        
+        // 复制原始样本到中间部分
+        System.arraycopy(samples, 0, paddedSamples, paddingSamplesCount, samples.size)
+        
+        // 填充末尾的静音（0值）
+        for (i in (samples.size + paddingSamplesCount) until paddedSamples.size) {
+            paddedSamples[i] = 0.0f
+        }
+        
+        return paddedSamples
     }
 }
