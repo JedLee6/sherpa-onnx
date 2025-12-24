@@ -267,6 +267,9 @@ class MainActivity : AppCompatActivity() {
     private fun recognizeAudioFile(audioFilePath: String) {
         Thread {
             try {
+                // 记录开始时间
+                val startTime = System.currentTimeMillis()
+                
                 // Read the converted WAV file
                 val audioFile = File(audioFilePath)
                 if (!audioFile.exists()) {
@@ -283,6 +286,10 @@ class MainActivity : AppCompatActivity() {
                 // Process the samples in chunks, similar to how real-time recording works
                 val chunkSize = 512 // Use the same buffer size as in processSamples
                 var startIndex = 0
+                
+                // 计算总块数用于进度计算
+                val totalChunks = kotlin.math.ceil(samples.size.toDouble() / chunkSize).toInt()
+                var processedChunks = 0
                 
                 while (startIndex < samples.size) {
                     val endIndex = kotlin.math.min(startIndex + chunkSize, samples.size)
@@ -303,16 +310,21 @@ class MainActivity : AppCompatActivity() {
                             } else {
                                 "$text。"
                             }
+                            // 计算进度百分比和耗时
+                            val progress = kotlin.math.min(((processedChunks.toDouble() / totalChunks) * 100).toInt(), 100)
+                            val elapsedTime = (System.currentTimeMillis() - startTime) / 1000.0
+                            val formattedOutput = String.format("[进度: %d%%, 耗时: %.1f秒] %s", progress, elapsedTime, formattedText)
                             runOnUiThread {
-                                lastText = "${lastText}\n音频文件识别结果: $formattedText"
+                                lastText = "${lastText}\n音频文件识别结果: $formattedOutput"
                                 idx += 1
-                                textView.append("\n音频文件识别结果: $formattedText")
+                                textView.append("\n音频文件识别结果: $formattedOutput")
                             }
                         }
                         vad.pop()
                     }
                     
                     startIndex = endIndex
+                    processedChunks++
                 }
                 
                 // Flush any remaining samples
@@ -331,13 +343,22 @@ class MainActivity : AppCompatActivity() {
                         } else {
                             "$text。"
                         }
+                        // 计算进度百分比和耗时
+                        val progress = 100 // 完成所有处理
+                        val elapsedTime = (System.currentTimeMillis() - startTime) / 1000.0
                         runOnUiThread {
-                            lastText = "${lastText}\n音频文件识别结果: $formattedText"
+                            lastText = "${lastText}\n音频文件识别结果: [进度: $progress%, 耗时: %.1f秒] $formattedText".format(elapsedTime)
                             idx += 1
-                            textView.append("\n音频文件识别结果: $formattedText")
+                            textView.append("\n音频文件识别结果: [进度: $progress%, 耗时: %.1f秒] $formattedText".format(elapsedTime))
                         }
                     }
                     vad.pop()
+                }
+
+                // 最终完成信息
+                val finalElapsedTime = (System.currentTimeMillis() - startTime) / 1000.0
+                runOnUiThread {
+                    textView.append("\n音频文件识别完成，总耗时: %.1f秒".format(finalElapsedTime))
                 }
 
             } catch (e: Exception) {

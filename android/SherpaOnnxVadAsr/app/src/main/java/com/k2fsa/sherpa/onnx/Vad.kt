@@ -128,7 +128,7 @@ fun getVadModelConfig(type: Int): VadModelConfig? {
                     maxSpeechDuration = 30.0F,
                 ),
                 sampleRate = 16000,
-                numThreads = 8,
+                numThreads = 2,
                 provider = "cpu",
             )
         }
