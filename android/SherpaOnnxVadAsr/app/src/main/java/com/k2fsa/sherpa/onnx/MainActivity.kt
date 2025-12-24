@@ -160,7 +160,8 @@ class MainActivity : AppCompatActivity() {
 
     private fun openFilePicker() {
         val intent = Intent(Intent.ACTION_GET_CONTENT).apply {
-            type = "audio/*"
+            // 支持音频和视频文件
+            type = "*/*"
             addCategory(Intent.CATEGORY_OPENABLE)
         }
         startActivityForResult(intent, REQUEST_SELECT_AUDIO_FILE)
@@ -204,18 +205,64 @@ class MainActivity : AppCompatActivity() {
     private fun processSelectedAudio(uri: Uri) {
         // Show processing message
         runOnUiThread {
-            textView.append("\n正在处理音频文件...")
+            textView.append("\n正在处理文件...")
         }
 
-        // Get the original audio file path
-        val originalAudioPath = getRealPathFromURI(uri)
+        // Get the original file path
+        val originalFilePath = getRealPathFromURI(uri)
 
+        // 检查文件扩展名以确定是否为视频文件
+        val fileExtension = originalFilePath.substringAfterLast(".", "").lowercase()
+        val isVideoFile = listOf("mp4", "avi", "mov", "wmv", "flv", "mkv", "webm", "m4v", "3gp", "3gpp").contains(fileExtension)
+
+        if (isVideoFile) {
+            // 如果是视频文件，先提取音频
+            extractAudioFromVideo(originalFilePath)
+        } else {
+            // 如果是音频文件，直接转换为16kHz WAV
+            convertAudioToWav(originalFilePath)
+        }
+    }
+
+    private fun extractAudioFromVideo(videoPath: String) {
+        runOnUiThread {
+            textView.append("\n正在从视频中提取音频...")
+        }
+
+        // Create temporary output file for extracted audio
+        val extractedAudioFile = File(filesDir, "extracted_audio_${System.currentTimeMillis().toString()}.wav")
+        val extractedAudioPath = extractedAudioFile.absolutePath
+
+        // Use FFmpeg to extract audio from video
+        val ffmpegCommand = "-i \"${videoPath}\" -vn -acodec pcm_s16le -ar 16000 -ac 1 \"${extractedAudioPath}\""
+
+        FFmpegKit.executeAsync(ffmpegCommand) { session ->
+            val returnCode = session.getReturnCode()
+
+            if (ReturnCode.isSuccess(returnCode)) {
+                Log.i(TAG, "Audio extracted successfully from video")
+                // Process the extracted audio file
+                runOnUiThread {
+                    textView.append("\n音频提取完成，正在转换格式...")
+                }
+                // 现在对提取的音频进行16kHz转换（虽然上面已经设置了16kHz，但再次确认格式）
+                convertAudioToWav(extractedAudioPath)
+            } else {
+                Log.e(TAG, "FFmpeg command failed: ${session.getFailStackTrace()}")
+                runOnUiThread {
+                    textView.append("\n视频转音频失败: ${session.getFailStackTrace()}")
+                }
+            }
+        }
+    }
+
+    private fun convertAudioToWav(audioPath: String) {
         // Create temporary output file for converted audio
         val outputAudioFile = File(filesDir, "converted_audio_${System.currentTimeMillis().toString()}.wav")
         val outputAudioPath = outputAudioFile.absolutePath
 
-        // Use FFmpeg to convert the audio to 16kHz WAV
-        val ffmpegCommand = "-i \"${originalAudioPath}\" -ar 16000 -ac 1 -c:a pcm_s16le \"${outputAudioPath}\""
+        // Use FFmpeg to convert the audio to 16kHz WAV if needed
+        val ffmpegCommand = "-i \"${audioPath}\" -ar 16000 -ac 1 -c:a pcm_s16le \"${outputAudioPath}\""
 
         FFmpegKit.executeAsync(ffmpegCommand) { session ->
             val returnCode = session.getReturnCode()
