@@ -13,6 +13,7 @@ import android.text.method.ScrollingMovementMethod
 import android.util.Log
 import android.widget.Button
 import android.widget.TextView
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -88,8 +89,8 @@ class MainActivity : AppCompatActivity() {
         Log.i(TAG, "Finished initializing model")
 
         Log.i(TAG, "Start to initialize non-streaimng recognizer")
-        initOfflineRecognizer()
-        Log.i(TAG, "Finished initializing non-streaming recognizer")
+        initOfflineRecognizerAsync()
+        Log.i(TAG, "Initializing non-streaming recognizer in background")
 
         recordButton = findViewById(R.id.record_button)
         recordButton.setOnClickListener { onclick() }
@@ -528,9 +529,9 @@ class MainActivity : AppCompatActivity() {
                 vad.acceptWaveform(samples)
                 while(!vad.empty()) {
                     var segment = vad.front()
-                    // 为语音段添加末尾padding，避免句子末尾丢字问题
-                    // 对于实时录音，我们使用原来的静音填充方法
-                    val paddedSamples = addPaddingToSegment(segment.samples)
+                    // 为语音段添加padding，按要求：先添加0.09秒实际音频内容，再添加0.3秒静音
+                    // 对于实时录音，我们使用新的音频段处理方法
+                    val paddedSamples = addPaddingToSegmentWithAudioAndSilence(segment.samples, segment.start, samples)
                     coroutineScope.launch {
                         val text = runSecondPass(paddedSamples)
                         if (text.isNotBlank()) {
@@ -563,7 +564,7 @@ class MainActivity : AppCompatActivity() {
         // for a list of available models
         //24  sherpa-onnx-fire-red-asr-large-zh_en-2025-02-16
         // 3  sherpa-onnx-whisper-large-v3
-        val asrModelType = 3
+        val asrModelType = 24
         val asrRuleFsts: String?
         asrRuleFsts = null
         Log.i(TAG, "Select model type ${asrModelType} for ASR")
@@ -580,6 +581,46 @@ class MainActivity : AppCompatActivity() {
             assetManager = application.assets,
             config = config,
         )
+    }
+    
+    private fun initOfflineRecognizerAsync() {
+        Thread {
+            try {
+                // Please change getOfflineModelConfig() to add new models
+                // See https://k2-fsa.github.io/sherpa/onnx/pretrained_models/index.html
+                // for a list of available models
+                //24  sherpa-onnx-fire-red-asr-large-zh_en-2025-02-16
+                // 3  sherpa-onnx-whisper-large-v3
+                val asrModelType = 24
+                val asrRuleFsts: String?
+                asrRuleFsts = null
+                Log.i(TAG, "Select model type ${asrModelType} for ASR")
+
+                val config = OfflineRecognizerConfig(
+                    featConfig = getFeatureConfig(sampleRate = sampleRateInHz, featureDim = 80),
+                    modelConfig = getOfflineModelConfig(type = asrModelType)!!,
+                )
+                if (asrRuleFsts != null) {
+                    config.ruleFsts = asrRuleFsts;
+                }
+
+                offlineRecognizer = OfflineRecognizer(
+                    assetManager = application.assets,
+                    config = config,
+                )
+                
+                // 在主线程显示加载成功的Toast
+                runOnUiThread {
+                    textView.append("\nASR模型加载成功")
+                    Toast.makeText(this, "ASR模型加载成功", Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error initializing offline recognizer: ${e.message}", e)
+                runOnUiThread {
+                    Toast.makeText(this, "ASR模型加载失败: ${e.message}", Toast.LENGTH_LONG).show()
+                }
+            }
+        }.start()
     }
 
     private fun runSecondPass(samples: FloatArray): String {
