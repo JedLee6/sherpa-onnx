@@ -572,15 +572,20 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun initOfflineRecognizer() {
-        // Get model type from SharedPreferences, default to 24 if not set
+        // Get model type and language from SharedPreferences
         val asrModelType = sharedPreferences.getInt("model_type", 24)
+        val selectedLanguage = sharedPreferences.getString("whisper_language", "") ?: ""
         val asrRuleFsts: String?
         asrRuleFsts = null
         Log.i(TAG, "Select model type ${asrModelType} for ASR")
 
         val config = OfflineRecognizerConfig(
             featConfig = getFeatureConfig(sampleRate = sampleRateInHz, featureDim = 80),
-            modelConfig = getOfflineModelConfig(type = asrModelType)!!,
+            modelConfig = getOfflineModelConfig(type = asrModelType)!!.apply {
+                if (asrModelType == 3) { // Whisper model
+                    whisper.language = selectedLanguage
+                }
+            },
         )
         if (asrRuleFsts != null) {
             config.ruleFsts = asrRuleFsts;
@@ -596,15 +601,20 @@ class MainActivity : AppCompatActivity() {
         Thread {
             val startTime = System.currentTimeMillis() // 记录开始时间
             try {
-                // Get model type from SharedPreferences, default to 24 if not set
+                // Get model type and language from SharedPreferences
                 val asrModelType = sharedPreferences.getInt("model_type", 24)
+                val selectedLanguage = sharedPreferences.getString("whisper_language", "") ?: ""
                 val asrRuleFsts: String?
                 asrRuleFsts = null
                 Log.i(TAG, "Select model type ${asrModelType} for ASR")
 
                 val config = OfflineRecognizerConfig(
                     featConfig = getFeatureConfig(sampleRate = sampleRateInHz, featureDim = 80),
-                    modelConfig = getOfflineModelConfig(type = asrModelType)!!,
+                    modelConfig = getOfflineModelConfig(type = asrModelType)!!.apply {
+                        if (asrModelType == 3) { // Whisper model
+                            whisper.language = selectedLanguage
+                        }
+                    },
                 )
                 if (asrRuleFsts != null) {
                     config.ruleFsts = asrRuleFsts;
