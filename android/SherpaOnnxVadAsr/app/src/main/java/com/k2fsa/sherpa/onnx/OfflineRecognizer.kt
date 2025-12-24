@@ -273,10 +273,10 @@ fun getOfflineModelConfig(type: Int): OfflineModelConfig? {
             val modelDir = "sherpa-onnx-whisper-large-v3"
             return OfflineModelConfig(
                 whisper = OfflineWhisperModelConfig(
-                    encoder = "$modelDir/encoder.int8.onnx",
-                    decoder = "$modelDir/decoder.int8.onnx",
+                    encoder = "$modelDir/large-v3-encoder.int8.onnx",
+                    decoder = "$modelDir/large-v3-decoder.int8.onnx",
                 ),
-                tokens = "$modelDir/tokens.txt",
+                tokens = "$modelDir/large-v3-tokens.txt",
                 modelType = "whisper",
             )
         }

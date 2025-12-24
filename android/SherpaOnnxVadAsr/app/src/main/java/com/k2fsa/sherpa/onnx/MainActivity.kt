@@ -425,7 +425,7 @@ class MainActivity : AppCompatActivity() {
         // WAV file format: RIFF header (12 bytes) + fmt chunk (24 bytes) + data chunk header (8 bytes) + audio data
         // Skip the RIFF header (12 bytes)
         var offset = 12
-        
+
         // Skip fmt chunk (usually 24 bytes total: "fmt " + 4 + 16 + format data)
         val fmtChunkSize = ((fileBytes[offset + 7].toInt() and 0xFF) shl 24) or
                 ((fileBytes[offset + 6].toInt() and 0xFF) shl 16) or
@@ -585,14 +585,13 @@ class MainActivity : AppCompatActivity() {
     
     private fun initOfflineRecognizerAsync() {
         Thread {
-            val startTime = System.currentTimeMillis() // 记录开始时间
             try {
                 // Please change getOfflineModelConfig() to add new models
                 // See https://k2-fsa.github.io/sherpa/onnx/pretrained_models/index.html
                 // for a list of available models
                 //24  sherpa-onnx-fire-red-asr-large-zh_en-2025-02-16
                 // 3  sherpa-onnx-whisper-large-v3
-                val asrModelType = 24
+                val asrModelType = 3
                 val asrRuleFsts: String?
                 asrRuleFsts = null
                 Log.i(TAG, "Select model type ${asrModelType} for ASR")
@@ -609,21 +608,16 @@ class MainActivity : AppCompatActivity() {
                     assetManager = application.assets,
                     config = config,
                 )
-                
-                val endTime = System.currentTimeMillis() // 记录结束时间
-                val duration = endTime - startTime // 计算耗时
-                
-                // 在主线程显示加载成功的Toast，包含耗时信息
+
+                // 在主线程显示加载成功的Toast
                 runOnUiThread {
-                    textView.append("\nASR模型加载成功 (耗时: ${duration}ms)")
-                    Toast.makeText(this, "ASR模型加载成功 (耗时: ${duration}ms)", Toast.LENGTH_SHORT).show()
+                    textView.append("\nASR模型加载成功")
+                    Toast.makeText(this, "ASR模型加载成功", Toast.LENGTH_SHORT).show()
                 }
             } catch (e: Exception) {
-                val endTime = System.currentTimeMillis() // 记录结束时间
-                val duration = endTime - startTime // 计算耗时
                 Log.e(TAG, "Error initializing offline recognizer: ${e.message}", e)
                 runOnUiThread {
-                    Toast.makeText(this, "ASR模型加载失败 (耗时: ${duration}ms): ${e.message}", Toast.LENGTH_LONG).show()
+                    Toast.makeText(this, "ASR模型加载失败: ${e.message}", Toast.LENGTH_LONG).show()
                 }
             }
         }.start()
