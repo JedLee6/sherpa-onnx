@@ -15,6 +15,13 @@ android {
         versionName "1.12.20"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        
+        // 增加内存分配以支持大模型
+        multiDexEnabled true
+    }
+    
+    dexOptions {
+        javaMaxHeapSize "4g"  // 为dex操作分配更多内存
     }
 
     buildTypes {
@@ -38,6 +45,7 @@ dependencies {
     implementation 'androidx.appcompat:appcompat:1.6.1'
     implementation 'com.google.android.material:material:1.9.0'
     implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+    implementation 'androidx.multidex:multidex:2.0.1'  // 添加MultiDex支持
 //    implementation 'com.arthenica:ffmpeg-kit-full:6.0-2'
     implementation(files("libs/ffmpeg-kit-full-gpl-6.0-2.LTS.aar"))
     implementation("com.arthenica:smart-exception-java:0.2.1")
