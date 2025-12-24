@@ -3,6 +3,7 @@ package com.k2fsa.sherpa.onnx.vad.asr
 import android.Manifest
 import android.app.Activity
 import android.content.Intent
+import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.media.AudioFormat
 import android.media.AudioRecord
@@ -22,6 +23,7 @@ import com.arthenica.ffmpegkit.ReturnCode
 import com.k2fsa.sherpa.onnx.OfflineRecognizer
 import com.k2fsa.sherpa.onnx.OfflineRecognizerConfig
 import com.k2fsa.sherpa.onnx.R
+import com.k2fsa.sherpa.onnx.SettingsActivity
 import com.k2fsa.sherpa.onnx.Vad
 import com.k2fsa.sherpa.onnx.getFeatureConfig
 import com.k2fsa.sherpa.onnx.getOfflineModelConfig
@@ -76,11 +78,16 @@ class MainActivity : AppCompatActivity() {
     @Volatile
     private var isRecording: Boolean = false
 
+    private lateinit var sharedPreferences: SharedPreferences
+
 
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+
+        // Initialize SharedPreferences
+        sharedPreferences = getSharedPreferences("ModelSettings", MODE_PRIVATE)
 
         ActivityCompat.requestPermissions(this, permissions, REQUEST_RECORD_AUDIO_PERMISSION)
 
@@ -97,6 +104,12 @@ class MainActivity : AppCompatActivity() {
 
         selectAudioButton = findViewById(R.id.select_audio_button)
         selectAudioButton.setOnClickListener { onSelectAudioClick() }
+
+        val settingsButton = findViewById<Button>(R.id.settings_button)
+        settingsButton.setOnClickListener {
+            val intent = Intent(this, SettingsActivity::class.java)
+            startActivity(intent)
+        }
 
         textView = findViewById(R.id.my_text)
         textView.movementMethod = ScrollingMovementMethod()
@@ -559,12 +572,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun initOfflineRecognizer() {
-        // Please change getOfflineModelConfig() to add new models
-        // See https://k2-fsa.github.io/sherpa/onnx/pretrained_models/index.html
-        // for a list of available models
-        //24  sherpa-onnx-fire-red-asr-large-zh_en-2025-02-16
-        // 3  sherpa-onnx-whisper-large-v3
-        val asrModelType = 24
+        // Get model type from SharedPreferences, default to 24 if not set
+        val asrModelType = sharedPreferences.getInt("model_type", 24)
         val asrRuleFsts: String?
         asrRuleFsts = null
         Log.i(TAG, "Select model type ${asrModelType} for ASR")
@@ -587,12 +596,8 @@ class MainActivity : AppCompatActivity() {
         Thread {
             val startTime = System.currentTimeMillis() // 记录开始时间
             try {
-                // Please change getOfflineModelConfig() to add new models
-                // See https://k2-fsa.github.io/sherpa/onnx/pretrained_models/index.html
-                // for a list of available models
-                //24  sherpa-onnx-fire-red-asr-large-zh_en-2025-02-16
-                // 3  sherpa-onnx-whisper-large-v3
-                val asrModelType = 3
+                // Get model type from SharedPreferences, default to 24 if not set
+                val asrModelType = sharedPreferences.getInt("model_type", 24)
                 val asrRuleFsts: String?
                 asrRuleFsts = null
                 Log.i(TAG, "Select model type ${asrModelType} for ASR")
