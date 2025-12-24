@@ -25,7 +25,7 @@ data class VadModelConfig(
     var sileroVadModelConfig: SileroVadModelConfig = SileroVadModelConfig(),
     var tenVadModelConfig: TenVadModelConfig = TenVadModelConfig(),
     var sampleRate: Int = 16000,
-    var numThreads: Int = 1,
+    var numThreads: Int = 4,
     var provider: String = "cpu",
     var debug: Boolean = false,
 )
@@ -128,7 +128,7 @@ fun getVadModelConfig(type: Int): VadModelConfig? {
                     maxSpeechDuration = 30.0F,
                 ),
                 sampleRate = 16000,
-                numThreads = 2,
+                numThreads = 4,
                 provider = "cpu",
             )
         }

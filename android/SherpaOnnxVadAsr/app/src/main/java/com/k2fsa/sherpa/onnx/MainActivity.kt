@@ -585,6 +585,7 @@ class MainActivity : AppCompatActivity() {
     
     private fun initOfflineRecognizerAsync() {
         Thread {
+            val startTime = System.currentTimeMillis() // 记录开始时间
             try {
                 // Please change getOfflineModelConfig() to add new models
                 // See https://k2-fsa.github.io/sherpa/onnx/pretrained_models/index.html
@@ -609,15 +610,20 @@ class MainActivity : AppCompatActivity() {
                     config = config,
                 )
                 
-                // 在主线程显示加载成功的Toast
+                val endTime = System.currentTimeMillis() // 记录结束时间
+                val duration = endTime - startTime // 计算耗时
+                
+                // 在主线程显示加载成功的Toast，包含耗时信息
                 runOnUiThread {
-                    textView.append("\nASR模型加载成功")
-                    Toast.makeText(this, "ASR模型加载成功", Toast.LENGTH_SHORT).show()
+                    textView.append("\nASR模型加载成功 (耗时: ${duration}ms)")
+                    Toast.makeText(this, "ASR模型加载成功 (耗时: ${duration}ms)", Toast.LENGTH_SHORT).show()
                 }
             } catch (e: Exception) {
+                val endTime = System.currentTimeMillis() // 记录结束时间
+                val duration = endTime - startTime // 计算耗时
                 Log.e(TAG, "Error initializing offline recognizer: ${e.message}", e)
                 runOnUiThread {
-                    Toast.makeText(this, "ASR模型加载失败: ${e.message}", Toast.LENGTH_LONG).show()
+                    Toast.makeText(this, "ASR模型加载失败 (耗时: ${duration}ms): ${e.message}", Toast.LENGTH_LONG).show()
                 }
             }
         }.start()
