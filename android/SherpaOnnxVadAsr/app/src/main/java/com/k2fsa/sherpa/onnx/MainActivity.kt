@@ -300,8 +300,8 @@ class MainActivity : AppCompatActivity() {
                     // Process any available segments immediately
                     while (!vad.empty()) {
                         val segment = vad.front()
-                        // 为语音段添加末尾padding，避免句子末尾丢字问题
-                        val paddedSamples = addPaddingToSegment(segment.samples)
+                        // 按要求处理音频段：先添加0.09秒实际音频内容，再添加0.3秒静音
+                        val paddedSamples = addPaddingToSegmentWithAudioAndSilence(segment.samples, segment.start, samples)
                         val text = runSecondPass(paddedSamples)
                         if (text.isNotBlank()) {
                             // Add a period to the end of the text if it doesn't already have one
@@ -333,8 +333,8 @@ class MainActivity : AppCompatActivity() {
                 // Process any remaining segments after flushing
                 while (!vad.empty()) {
                     val segment = vad.front()
-                    // 为语音段添加末尾padding，避免句子末尾丢字问题
-                    val paddedSamples = addPaddingToSegment(segment.samples)
+                    // 按要求处理音频段：先添加0.09秒实际音频内容，再添加0.3秒静音
+                    val paddedSamples = addPaddingToSegmentWithAudioAndSilence(segment.samples, segment.start, samples)
                     val text = runSecondPass(paddedSamples)
                     if (text.isNotBlank()) {
                         // Add a period to the end of the text if it doesn't already have one
@@ -482,6 +482,7 @@ class MainActivity : AppCompatActivity() {
                 while(!vad.empty()) {
                     var segment = vad.front()
                     // 为语音段添加末尾padding，避免句子末尾丢字问题
+                    // 对于实时录音，我们使用原来的静音填充方法
                     val paddedSamples = addPaddingToSegment(segment.samples)
                     coroutineScope.launch {
                         val text = runSecondPass(paddedSamples)
@@ -563,6 +564,95 @@ class MainActivity : AppCompatActivity() {
         // 填充末尾的静音（0值）
         for (i in (samples.size + paddingSamplesCount) until paddedSamples.size) {
             paddedSamples[i] = 0.0f
+        }
+        
+        return paddedSamples
+    }
+
+    /**
+     * 为语音段添加首尾padding，按要求：先添加0.09秒实际音频内容，再添加0.3秒静音
+     * @param segmentSamples 被VAD分割的音频段样本
+     * @param segmentStartIndex 音频段在原音频中的起始索引
+     * @param originalSamples 原始完整音频样本
+     * @return 添加padding后的语音样本
+     */
+    private fun addPaddingToSegmentWithAudioAndSilence(
+        segmentSamples: FloatArray,
+        segmentStartIndex: Int,
+        originalSamples: FloatArray
+    ): FloatArray {
+        // 计算0.09秒和0.3秒对应的采样点数
+        val audioPaddingSamplesCount = (sampleRateInHz * 0.09f).toInt()
+        val silencePaddingSamplesCount = (sampleRateInHz * 0.3f).toInt()
+        
+        // 计算最终数组大小：原始段 + 前后音频padding + 前后静音padding
+        val totalPaddingSize = (audioPaddingSamplesCount + silencePaddingSamplesCount) * 2
+        val paddedSamples = FloatArray(segmentSamples.size + totalPaddingSize)
+        
+        var currentIndex = 0
+        
+        // 1. 添加头部0.09秒实际音频内容
+        val startAudioPaddingStartIndex = maxOf(0, segmentStartIndex - audioPaddingSamplesCount)
+        val actualAudioPaddingSize = minOf(audioPaddingSamplesCount, segmentStartIndex)
+        if (actualAudioPaddingSize > 0) {
+            System.arraycopy(
+                originalSamples,
+                startAudioPaddingStartIndex,
+                paddedSamples,
+                currentIndex,
+                actualAudioPaddingSize
+            )
+            currentIndex += actualAudioPaddingSize
+        }
+        
+        // 如果实际音频不够0.09秒，则用静音填充剩余部分
+        if (actualAudioPaddingSize < audioPaddingSamplesCount) {
+            val silenceFillCount = audioPaddingSamplesCount - actualAudioPaddingSize
+            for (i in 0 until silenceFillCount) {
+                paddedSamples[currentIndex + i] = 0.0f
+            }
+            currentIndex += silenceFillCount
+        }
+        
+        // 2. 添加头部0.3秒静音
+        for (i in 0 until silencePaddingSamplesCount) {
+            paddedSamples[currentIndex + i] = 0.0f
+        }
+        currentIndex += silencePaddingSamplesCount
+        
+        // 3. 复制原始语音段
+        System.arraycopy(segmentSamples, 0, paddedSamples, currentIndex, segmentSamples.size)
+        currentIndex += segmentSamples.size
+        
+        // 4. 添加尾部0.3秒静音
+        for (i in 0 until silencePaddingSamplesCount) {
+            paddedSamples[currentIndex + i] = 0.0f
+        }
+        currentIndex += silencePaddingSamplesCount
+        
+        // 5. 添加尾部0.09秒实际音频内容
+        val segmentEndIndex = segmentStartIndex + segmentSamples.size
+        val endAudioPaddingStartIndex = minOf(originalSamples.size - 1, segmentEndIndex)
+        val endAudioPaddingEndIndex = minOf(originalSamples.size, segmentEndIndex + audioPaddingSamplesCount)
+        val endAudioActualSize = endAudioPaddingEndIndex - endAudioPaddingStartIndex
+        
+        if (endAudioActualSize > 0) {
+            System.arraycopy(
+                originalSamples,
+                endAudioPaddingStartIndex,
+                paddedSamples,
+                currentIndex,
+                endAudioActualSize
+            )
+            currentIndex += endAudioActualSize
+            
+            // 如果实际音频不够0.09秒，则用静音填充剩余部分
+            if (endAudioActualSize < audioPaddingSamplesCount) {
+                val silenceFillCount = audioPaddingSamplesCount - endAudioActualSize
+                for (i in 0 until silenceFillCount) {
+                    paddedSamples[currentIndex + i] = 0.0f
+                }
+            }
         }
         
         return paddedSamples
