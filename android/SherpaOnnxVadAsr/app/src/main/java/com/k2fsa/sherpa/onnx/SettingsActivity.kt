@@ -22,14 +22,14 @@ class SettingsActivity : AppCompatActivity() {
         // 定义模型类型选项
         val MODEL_TYPES = arrayOf(
             "Whisper Large-v3 (type=3)",
-            "Whisper Tiny-en (type=2)", 
+            "sherpa-onnx-fire-red-asr-large-zh_en-2025-02-16 (type=24)",
+            "Whisper Tiny-en (type=2)",
             "Paraformer Chinese (type=0)",
             "Zipformer English (type=1)",
             "Zipformer Chinese (type=4)",
-            "Zipformer Multilingual (type=5)"
         )
         
-        val MODEL_TYPE_VALUES = intArrayOf(3, 2, 0, 1, 4, 5)
+        val MODEL_TYPE_VALUES = intArrayOf(3, 24, 2, 0, 1, 4)
 
         // LANGUAGES字典
         val LANGUAGES = mapOf(

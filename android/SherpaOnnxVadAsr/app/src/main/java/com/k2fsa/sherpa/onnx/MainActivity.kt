@@ -24,6 +24,7 @@ import com.k2fsa.sherpa.onnx.OfflineRecognizer
 import com.k2fsa.sherpa.onnx.OfflineRecognizerConfig
 import com.k2fsa.sherpa.onnx.R
 import com.k2fsa.sherpa.onnx.SettingsActivity
+import com.k2fsa.sherpa.onnx.SettingsActivity.Companion.PREFS_NAME
 import com.k2fsa.sherpa.onnx.Vad
 import com.k2fsa.sherpa.onnx.getFeatureConfig
 import com.k2fsa.sherpa.onnx.getOfflineModelConfig
@@ -87,7 +88,7 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.activity_main)
 
         // Initialize SharedPreferences
-        sharedPreferences = getSharedPreferences("ModelSettings", MODE_PRIVATE)
+        sharedPreferences = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
 
         ActivityCompat.requestPermissions(this, permissions, REQUEST_RECORD_AUDIO_PERMISSION)
 
@@ -630,7 +631,7 @@ class MainActivity : AppCompatActivity() {
 
                 // 在主线程显示加载成功的Toast，包含耗时信息
                 runOnUiThread {
-                    textView.append("\nASR模型加载成功 (耗时: ${duration}ms)")
+                    textView.append("\nASR模型加载成功 (耗时: ${duration}ms)，语言：${selectedLanguage}，模型类型：${asrModelType}")
                     Toast.makeText(this, "ASR模型加载成功 (耗时: ${duration}ms)", Toast.LENGTH_SHORT).show()
                 }
             } catch (e: Exception) {
