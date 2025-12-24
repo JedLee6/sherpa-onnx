@@ -561,8 +561,9 @@ class MainActivity : AppCompatActivity() {
         // Please change getOfflineModelConfig() to add new models
         // See https://k2-fsa.github.io/sherpa/onnx/pretrained_models/index.html
         // for a list of available models
-        //sherpa-onnx-fire-red-asr-large-zh_en-2025-02-16
-        val asrModelType = 24
+        //24  sherpa-onnx-fire-red-asr-large-zh_en-2025-02-16
+        // 3  sherpa-onnx-whisper-large-v3
+        val asrModelType = 3
         val asrRuleFsts: String?
         asrRuleFsts = null
         Log.i(TAG, "Select model type ${asrModelType} for ASR")
