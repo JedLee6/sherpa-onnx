@@ -543,11 +543,8 @@ class MainActivity : AppCompatActivity() {
                 vad.acceptWaveform(samples)
                 while(!vad.empty()) {
                     var segment = vad.front()
-                    // 为语音段添加padding，按要求：先添加0.09秒实际音频内容，再添加0.3秒静音
-                    // 对于实时录音，我们使用新的音频段处理方法
-                    val paddedSamples = addPaddingToSegmentWithAudioAndSilence(segment.samples, segment.start, samples)
                     coroutineScope.launch {
-                        val text = runSecondPass(paddedSamples)
+                        val text = runSecondPass(segment.samples)
                         if (text.isNotBlank()) {
                             withContext(Dispatchers.Main) {
                                 lastText = "${lastText}\n${idx}: ${text}"
@@ -570,32 +567,6 @@ class MainActivity : AppCompatActivity() {
 
         // Clean up the coroutine scope when done
         coroutineScope.cancel()
-    }
-
-    private fun initOfflineRecognizer() {
-        // Get model type and language from SharedPreferences
-        val asrModelType = sharedPreferences.getInt("model_type", 24)
-        val selectedLanguage = sharedPreferences.getString("whisper_language", "") ?: ""
-        val asrRuleFsts: String?
-        asrRuleFsts = null
-        Log.i(TAG, "Select model type ${asrModelType} for ASR")
-
-        val config = OfflineRecognizerConfig(
-            featConfig = getFeatureConfig(sampleRate = sampleRateInHz, featureDim = 80),
-            modelConfig = getOfflineModelConfig(type = asrModelType)!!.apply {
-                if (asrModelType == 3) { // Whisper model
-                    whisper.language = selectedLanguage
-                }
-            },
-        )
-        if (asrRuleFsts != null) {
-            config.ruleFsts = asrRuleFsts;
-        }
-
-        offlineRecognizer = OfflineRecognizer(
-            assetManager = application.assets,
-            config = config,
-        )
     }
 
     private fun initOfflineRecognizerAsync() {
