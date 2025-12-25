@@ -24,13 +24,14 @@ class SettingsActivity : AppCompatActivity() {
             "Whisper Large-v3 (type=3)",
             "sherpa-onnx-fire-red-asr-large-zh_en-2025-02-16 (type=24)",
             "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2025-09-09 (type=41)",
+            "sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8 (type=40)",
             "Whisper Tiny-en (type=2)",
             "Paraformer Chinese (type=0)",
             "Zipformer English (type=1)",
             "Zipformer Chinese (type=4)",
         )
         
-        val MODEL_TYPE_VALUES = intArrayOf(3, 24, 41, 2, 0, 1, 4)
+        val MODEL_TYPE_VALUES = intArrayOf(3, 24, 41, 40, 2, 0, 1, 4)
 
         // LANGUAGES字典
         val LANGUAGES = mapOf(
