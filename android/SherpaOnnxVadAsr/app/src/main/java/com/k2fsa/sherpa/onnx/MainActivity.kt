@@ -326,6 +326,22 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * 将采样点索引转换为SRT字幕格式的时间戳
+     * @param sampleIndex 采样点在音频中的索引
+     * @param sampleRate 采样率（默认16000）
+     * @return 格式化的时间戳字符串 (HH:MM:SS,mmm)
+     */
+    private fun sampleIndexToSrtTimestamp(sampleIndex: Int, sampleRate: Int = 16000): String {
+        val totalSeconds = sampleIndex.toDouble() / sampleRate
+        val hours = (totalSeconds / 3600).toInt()
+        val minutes = ((totalSeconds % 3600) / 60).toInt()
+        val seconds = (totalSeconds % 60)
+        val milliseconds = ((seconds - seconds.toInt()) * 1000).toInt()
+        
+        return String.format("%02d:%02d:%02d,%03d", hours, minutes, seconds.toInt(), milliseconds)
+    }
+
     private fun recognizeAudioFile(audioFilePath: String) {
         Thread {
             try {
@@ -364,6 +380,12 @@ class MainActivity : AppCompatActivity() {
                         val segment = vad.front()
                         // 按要求处理音频段：先添加0.09秒实际音频内容，再添加0.3秒静音
                         val paddedSamples = addPaddingToSegmentWithAudioAndSilence(segment.samples, segment.start, samples)
+                        
+                        // 计算原始语音段的开始和结束时间戳（不包括padding）
+                        val segmentEndIndex = segment.start + segment.samples.size
+                        val startTimeStamp = sampleIndexToSrtTimestamp(segment.start)
+                        val endTimeStamp = sampleIndexToSrtTimestamp(segmentEndIndex)
+                        
                         val text = runSecondPass(paddedSamples)
                         if (text.isNotBlank()) {
                             // Add a period to the end of the text if it doesn't already have one
@@ -375,7 +397,7 @@ class MainActivity : AppCompatActivity() {
                             // 计算进度百分比和耗时
                             val progress = kotlin.math.min(((processedChunks.toDouble() / totalChunks) * 100).toInt(), 100)
                             val elapsedTime = (System.currentTimeMillis() - startTime) / 1000.0
-                            val formattedOutput = String.format("[进度: %d%%, 耗时: %.1f秒] %s", progress, elapsedTime, formattedText)
+                            val formattedOutput = String.format("[时间戳: %s --> %s, 进度: %d%%, 耗时: %.1f秒] %s", startTimeStamp, endTimeStamp, progress, elapsedTime, formattedText)
                             runOnUiThread {
                                 lastText = "${lastText}\n音频文件识别结果: $formattedOutput"
                                 idx += 1
@@ -397,6 +419,12 @@ class MainActivity : AppCompatActivity() {
                     val segment = vad.front()
                     // 按要求处理音频段：先添加0.09秒实际音频内容，再添加0.3秒静音
                     val paddedSamples = addPaddingToSegmentWithAudioAndSilence(segment.samples, segment.start, samples)
+                    
+                    // 计算原始语音段的开始和结束时间戳（不包括padding）
+                    val segmentEndIndex = segment.start + segment.samples.size
+                    val startTimeStamp = sampleIndexToSrtTimestamp(segment.start)
+                    val endTimeStamp = sampleIndexToSrtTimestamp(segmentEndIndex)
+                    
                     val text = runSecondPass(paddedSamples)
                     if (text.isNotBlank()) {
                         // Add a period to the end of the text if it doesn't already have one
@@ -408,10 +436,11 @@ class MainActivity : AppCompatActivity() {
                         // 计算进度百分比和耗时
                         val progress = 100 // 完成所有处理
                         val elapsedTime = (System.currentTimeMillis() - startTime) / 1000.0
+                        val formattedOutput = String.format("[时间戳: %s --> %s, 进度: %d%%, 耗时: %.1f秒] %s", startTimeStamp, endTimeStamp, progress, elapsedTime, formattedText)
                         runOnUiThread {
-                            lastText = "${lastText}\n音频文件识别结果: [进度: $progress%, 耗时: %.1f秒] $formattedText".format(elapsedTime)
+                            lastText = "${lastText}\n音频文件识别结果: $formattedOutput"
                             idx += 1
-                            textView.append("\n音频文件识别结果: [进度: $progress%, 耗时: %.1f秒] $formattedText".format(elapsedTime))
+                            textView.append("\n音频文件识别结果: $formattedOutput")
                         }
                     }
                     vad.pop()
