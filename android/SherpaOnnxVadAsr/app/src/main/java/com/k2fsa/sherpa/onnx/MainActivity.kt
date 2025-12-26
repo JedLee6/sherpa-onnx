@@ -2,10 +2,14 @@ package com.k2fsa.sherpa.onnx.vad.asr
 
 import android.Manifest
 import android.app.Activity
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.media.AudioFormat
+import android.media.AudioManager
 import android.media.AudioRecord
 import android.media.MediaRecorder
 import android.net.Uri
@@ -18,6 +22,7 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import com.arthenica.ffmpegkit.FFmpegKit
 import com.arthenica.ffmpegkit.ReturnCode
 import com.k2fsa.sherpa.onnx.OfflineRecognizer
@@ -39,13 +44,124 @@ import java.io.FileOutputStream
 import kotlin.concurrent.thread
 import kotlin.math.min
 
+// Add necessary imports for MediaProjection
+import android.media.projection.MediaProjectionManager
+import android.media.AudioAttributes
+import android.media.AudioPlaybackCaptureConfiguration
+import android.media.projection.MediaProjection
+import com.k2fsa.sherpa.onnx.MediaProjectionService
+import java.lang.reflect.Method
+import kotlin.math.max
+
 
 private const val TAG = "sherpa-onnx"
 private const val REQUEST_RECORD_AUDIO_PERMISSION = 200
 private const val REQUEST_READ_AUDIO_PERMISSION = 201
 private const val REQUEST_SELECT_AUDIO_FILE = 202
+// New request codes for system audio
+private const val REQUEST_SYSTEM_AUDIO_PERMISSION = 203
+// Media projection request code
+private const val REQUEST_MEDIA_PROJECTION = 204
 
 class MainActivity : AppCompatActivity() {
+
+    private val mediaProjectionReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == MediaProjectionService.BROADCAST_MEDIA_PROJECTION_READY) {
+                mediaProjection = intent?.getParcelableExtra(MediaProjectionService.EXTRA_MEDIA_PROJECTION) as? MediaProjection
+                
+                // Initialize audio record for system audio with the media projection
+                 initializeSystemAudioRecording()
+             }
+         }
+     }
+     
+     private fun initializeSystemAudioRecording() {
+         runOnUiThread {
+             // Initialize audio record for system audio with the media projection
+             val numBytes = AudioRecord.getMinBufferSize(sampleRateInHz, channelConfig, audioFormat)
+             Log.i(TAG, "System audio buffer size in milliseconds: ${numBytes * 1000.0f / sampleRateInHz}")
+
+             // Create audio attributes for system audio capture (Android Q+)
+             val audioAttributesBuilder = AudioAttributes.Builder()
+                 .setUsage(AudioAttributes.USAGE_MEDIA)
+                 .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+
+             // For Android Q+, we can use AudioPlaybackCaptureConfiguration to capture system audio
+             val audioAttributes = audioAttributesBuilder.build()
+
+             // For Android Q+, create AudioPlaybackCaptureConfiguration to specify what audio can be captured
+             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                 mediaProjection?.let { projection ->
+                     val config = AudioPlaybackCaptureConfiguration.Builder(projection)
+                         .addMatchingUsage(AudioAttributes.USAGE_MEDIA)
+                         .addMatchingUsage(AudioAttributes.USAGE_GAME)
+                         .addMatchingUsage(AudioAttributes.USAGE_ASSISTANT)
+                         .build()
+                     // The configuration is used by the system when AudioRecord starts recording
+                 }
+             }
+
+             try {
+                 // Using reflection to access the constructor that accepts AudioAttributes for system audio
+                 val audioRecordConstructor = AudioRecord::class.java.getConstructor(
+                     AudioAttributes::class.java,
+                     android.media.AudioFormat::class.java,
+                     Integer.TYPE,
+                     Integer.TYPE
+                 )
+
+                 val audioFormat = android.media.AudioFormat.Builder()
+                     .setEncoding(this.audioFormat)
+                     .setSampleRate(sampleRateInHz)
+                     .setChannelMask(channelConfig)
+                     .build()
+
+                 systemAudioRecord = audioRecordConstructor.newInstance(
+                     audioAttributes,
+                     audioFormat,
+                     numBytes * 2,
+                     AudioManager.AUDIO_SESSION_ID_GENERATE
+                 )
+                 
+                 
+
+                 // Check if the AudioRecord initialized correctly
+                 if (systemAudioRecord?.state != AudioRecord.STATE_INITIALIZED) {
+                     Log.e(TAG, "Failed to initialize system audio recorder. This might be because system audio capture requires special permissions or is not supported on this device.")
+                     runOnUiThread {
+                         Toast.makeText(this, "系统音频录制初始化失败。此功能可能需要特殊权限或设备不支持。", Toast.LENGTH_LONG).show()
+                     }
+                     systemAudioRecord?.release()
+                     systemAudioRecord = null
+                     return@runOnUiThread
+                 }
+
+                 systemAudioRecord?.startRecording()
+                 isSystemAudioRecording = true
+
+                 // Update button text
+                 val systemAudioRecordButton = findViewById<Button>(R.id.record_system_audio_button)
+                 systemAudioRecordButton.text = "停止录制系统音频"
+
+                 textView.text = ""
+                 lastText = ""
+                 idx = 0
+
+                 vad.reset()
+                 systemAudioRecordingThread = thread(true) {
+                     processSystemAudioSamples()
+                 }
+                 Log.i(TAG, "Started system audio recording")
+             } catch (e: Exception) {
+                 Log.e(TAG, "Error initializing system audio recording: ${e.message}")
+                 runOnUiThread {
+                     Toast.makeText(this, "系统音频录制初始化失败: ${e.message}", Toast.LENGTH_LONG).show()
+                 }
+             }
+         }
+     }
+
 
     private lateinit var recordButton: Button
     private lateinit var selectAudioButton: Button
@@ -54,8 +170,15 @@ class MainActivity : AppCompatActivity() {
     private lateinit var vad: Vad
 
     private var audioRecord: AudioRecord? = null
+    private var systemAudioRecord: AudioRecord? = null // For system audio recording
     private var recordingThread: Thread? = null
+    private var systemAudioRecordingThread: Thread? = null // For system audio recording thread
     private val audioSource = MediaRecorder.AudioSource.MIC
+    private val systemAudioSource = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+        MediaRecorder.AudioSource.REMOTE_SUBMIX // For capturing system audio
+    } else {
+        MediaRecorder.AudioSource.MIC // Fallback for older versions (won't capture system audio without root)
+    }
     private val sampleRateInHz = 16000
     private val channelConfig = AudioFormat.CHANNEL_IN_MONO
 
@@ -78,6 +201,11 @@ class MainActivity : AppCompatActivity() {
 
     @Volatile
     private var isRecording: Boolean = false
+    @Volatile
+    private var isSystemAudioRecording: Boolean = false // Flag for system audio recording
+    // Media projection variables
+    private var mediaProjectionManager: MediaProjectionManager? = null
+    private var mediaProjection: android.media.projection.MediaProjection? = null
 
     private lateinit var sharedPreferences: SharedPreferences
 
@@ -112,8 +240,176 @@ class MainActivity : AppCompatActivity() {
             startActivity(intent)
         }
 
+        // Add system audio recording button
+        val systemAudioRecordButton = findViewById<Button>(R.id.record_system_audio_button)
+        systemAudioRecordButton.setOnClickListener { onSystemAudioClick() }
+
         textView = findViewById(R.id.my_text)
         textView.movementMethod = ScrollingMovementMethod()
+        
+        // Initialize MediaProjectionManager for system audio capture
+        mediaProjectionManager = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+    }
+
+    private fun onSystemAudioClick() {
+        if (!isSystemAudioRecording) {
+            startSystemAudioRecording()
+        } else {
+            stopSystemAudioRecording()
+        }
+    }
+
+    private fun startSystemAudioRecording() {
+        if (isSystemAudioRecording) return
+
+        // Check if we have audio recording permission
+        if (ContextCompat.checkSelfPermission(
+                this, Manifest.permission.RECORD_AUDIO
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            ActivityCompat.requestPermissions(this, permissions, REQUEST_RECORD_AUDIO_PERMISSION)
+            return
+        }
+
+        // For Android Q and above, we need to use MediaProjection to capture system audio
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+            // Start media projection intent to get permission to capture system audio
+            val intent = mediaProjectionManager?.createScreenCaptureIntent()
+            intent?.let {
+                startActivityForResult(it, REQUEST_MEDIA_PROJECTION)
+            } ?: run {
+                Log.e(TAG, "Failed to create media projection intent")
+                runOnUiThread {
+                    Toast.makeText(this, "无法创建媒体投影意图", Toast.LENGTH_LONG).show()
+                }
+            }
+        } else {
+            // For older versions, we cannot capture system audio without special permissions or root
+            runOnUiThread {
+                Toast.makeText(this, "系统音频录制需要Android 10或更高版本", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        when (requestCode) {
+            REQUEST_MEDIA_PROJECTION -> {
+                if (resultCode == RESULT_OK && data != null) {
+                    // Register the broadcast receiver to listen for media projection ready
+                    LocalBroadcastManager.getInstance(this).registerReceiver(
+                        mediaProjectionReceiver,
+                        IntentFilter(MediaProjectionService.BROADCAST_MEDIA_PROJECTION_READY)
+                    )
+
+                    // Start the foreground service before getting media projection
+                    val serviceIntent = Intent(this, MediaProjectionService::class.java).apply {
+                        action = MediaProjectionService.ACTION_START
+                        putExtra(MediaProjectionService.EXTRA_RESULT_CODE, resultCode)
+                        putExtra(MediaProjectionService.EXTRA_RESULT_DATA, data)
+                    }
+                    startForegroundService(serviceIntent)
+                } else {
+                    Log.e(TAG, "Media projection denied or failed")
+                    runOnUiThread {
+                        Toast.makeText(this, "媒体投影被拒绝或失败", Toast.LENGTH_LONG).show()
+                    }
+                }
+            }
+
+            REQUEST_SELECT_AUDIO_FILE -> {
+                if (resultCode == RESULT_OK) {
+                    data?.data?.let { uri ->
+                        processSelectedAudio(uri)
+                    }
+                }
+            }
+        }
+    }
+
+    private fun stopSystemAudioRecording() {
+        if (!isSystemAudioRecording) return
+
+        isSystemAudioRecording = false
+
+        systemAudioRecord?.apply {
+            if (recordingState == AudioRecord.RECORDSTATE_RECORDING) {
+                stop()
+            }
+            release()
+        }
+        systemAudioRecord = null
+
+        // Release the media projection
+        mediaProjection?.stop()
+        mediaProjection = null
+
+        systemAudioRecordingThread?.interrupt()
+        systemAudioRecordingThread = null
+
+        // Stop the foreground service
+        val serviceIntent = Intent(this, MediaProjectionService::class.java)
+        stopService(serviceIntent)
+
+        // Update button text
+        val systemAudioRecordButton = findViewById<Button>(R.id.record_system_audio_button)
+        systemAudioRecordButton.text = "录制系统音频"
+
+        Log.i(TAG, "Stopped system audio recording")
+    }
+    
+    override fun onDestroy() {
+        super.onDestroy()
+        // Make sure to stop the service and release media projection when activity is destroyed
+        if (mediaProjection != null) {
+            mediaProjection?.stop()
+            mediaProjection = null
+        }
+        
+        val serviceIntent = Intent(this, MediaProjectionService::class.java)
+        stopService(serviceIntent)
+    }
+
+    private fun processSystemAudioSamples() {
+        Log.i(TAG, "processing system audio samples")
+
+        val bufferSize = 512 // in samples
+        val buffer = ShortArray(bufferSize)
+        val coroutineScope = CoroutineScope(Dispatchers.IO)
+
+
+        while (isSystemAudioRecording) {
+            val ret = systemAudioRecord?.read(buffer, 0, buffer.size)
+            if (ret != null && ret > 0) {
+                val samples = FloatArray(ret) { buffer[it] / 32768.0f }
+
+                vad.acceptWaveform(samples)
+                while(!vad.empty()) {
+                    var segment = vad.front()
+                    coroutineScope.launch {
+                        val text = runSecondPass(segment.samples)
+                        if (text.isNotBlank()) {
+                            withContext(Dispatchers.Main) {
+                                lastText = "${lastText}\n${idx}: ${text}"
+                                idx += 1
+                                textView.text = lastText.lowercase()
+                            }
+                        }
+                    }
+
+                    vad.pop();
+                }
+
+                val isSpeechDetected = vad.isSpeechDetected()
+
+                runOnUiThread {
+                    textView.text = lastText.lowercase()
+                }
+            }
+        }
+
+        // Clean up the coroutine scope when done
+        coroutineScope.cancel()
     }
 
     private fun onclick() {
@@ -208,14 +504,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == REQUEST_SELECT_AUDIO_FILE && resultCode == Activity.RESULT_OK) {
-            data?.data?.let { uri ->
-                processSelectedAudio(uri)
-            }
-        }
-    }
+
 
     private fun processSelectedAudio(uri: Uri) {
         // Show processing message
