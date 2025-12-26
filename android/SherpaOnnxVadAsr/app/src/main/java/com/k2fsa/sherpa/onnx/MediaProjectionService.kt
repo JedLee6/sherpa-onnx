@@ -4,6 +4,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
 import android.content.Intent
+import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
 import android.os.Build
 import android.os.IBinder
@@ -33,7 +34,12 @@ class MediaProjectionService : Service() {
         when (intent?.action) {
             ACTION_START -> {
                 val resultCode = intent.getIntExtra(EXTRA_RESULT_CODE, 0)
-                val resultData = intent.getParcelableExtra<Intent>(EXTRA_RESULT_DATA)
+                val resultData = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    intent.getParcelableExtra(EXTRA_RESULT_DATA, Intent::class.java)
+                } else {
+                    @Suppress("DEPRECATION")
+                    intent.getParcelableExtra<Intent>(EXTRA_RESULT_DATA)
+                }
 
                 // Start foreground service with notification
                 val notification = NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
@@ -45,20 +51,17 @@ class MediaProjectionService : Service() {
 
                 startForeground(NOTIFICATION_ID, notification)
 
-                // Now we can safely get the media projection within the foreground service context
+                // Send the result code and data back to the activity instead of the media projection
                 if (resultCode != 0 && resultData != null) {
                     try {
-                        val mediaProjectionManager = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-                        val mediaProjection = mediaProjectionManager.getMediaProjection(resultCode, resultData)
-                        
-                        // Send the media projection back to the activity via broadcast
                         val broadcastIntent = Intent(BROADCAST_MEDIA_PROJECTION_READY)
-                        broadcastIntent.putExtra(EXTRA_MEDIA_PROJECTION, mediaProjection)
+                        broadcastIntent.putExtra(EXTRA_RESULT_CODE, resultCode)
+                        broadcastIntent.putExtra(EXTRA_RESULT_DATA, resultData)
                         LocalBroadcastManager.getInstance(this).sendBroadcast(broadcastIntent)
                         
-                        Log.i(TAG, "Media projection obtained successfully in foreground service")
+                        Log.i(TAG, "Media projection result code and data sent successfully")
                     } catch (e: Exception) {
-                        Log.e(TAG, "Error getting media projection: ${e.message}")
+                        Log.e(TAG, "Error sending media projection data: ${e.message}")
                     }
                 }
 

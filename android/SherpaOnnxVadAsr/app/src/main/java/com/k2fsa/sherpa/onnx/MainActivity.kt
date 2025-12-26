@@ -68,10 +68,22 @@ class MainActivity : AppCompatActivity() {
     private val mediaProjectionReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action == MediaProjectionService.BROADCAST_MEDIA_PROJECTION_READY) {
-                mediaProjection = intent?.getParcelableExtra(MediaProjectionService.EXTRA_MEDIA_PROJECTION) as? MediaProjection
+                val resultCode = intent.getIntExtra(MediaProjectionService.EXTRA_RESULT_CODE, 0)
+                val resultData = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                    intent.getParcelableExtra(MediaProjectionService.EXTRA_RESULT_DATA, Intent::class.java)
+                } else {
+                    @Suppress("DEPRECATION")
+                    intent.getParcelableExtra<Intent>(MediaProjectionService.EXTRA_RESULT_DATA)
+                }
+                
+                // Get the MediaProjection using the result code and data
+                if (resultCode != 0 && resultData != null) {
+                    val mediaProjectionManager = getSystemService(MEDIA_PROJECTION_SERVICE) as android.media.projection.MediaProjectionManager
+                    mediaProjection = mediaProjectionManager.getMediaProjection(resultCode, resultData)
+                }
                 
                 // Initialize audio record for system audio with the media projection
-                 initializeSystemAudioRecording()
+                initializeSystemAudioRecording()
              }
          }
      }
@@ -90,39 +102,56 @@ class MainActivity : AppCompatActivity() {
              // For Android Q+, we can use AudioPlaybackCaptureConfiguration to capture system audio
              val audioAttributes = audioAttributesBuilder.build()
 
-             // For Android Q+, create AudioPlaybackCaptureConfiguration to specify what audio can be captured
-             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
-                 mediaProjection?.let { projection ->
-                     val config = AudioPlaybackCaptureConfiguration.Builder(projection)
-                         .addMatchingUsage(AudioAttributes.USAGE_MEDIA)
-                         .addMatchingUsage(AudioAttributes.USAGE_GAME)
-                         .addMatchingUsage(AudioAttributes.USAGE_ASSISTANT)
-                         .build()
-                     // The configuration is used by the system when AudioRecord starts recording
-                 }
-             }
+             // AudioPlaybackCaptureConfiguration will be created later when initializing AudioRecord for Android Q+
 
              try {
-                 // Using reflection to access the constructor that accepts AudioAttributes for system audio
-                 val audioRecordConstructor = AudioRecord::class.java.getConstructor(
-                     AudioAttributes::class.java,
-                     android.media.AudioFormat::class.java,
-                     Integer.TYPE,
-                     Integer.TYPE
-                 )
-
                  val audioFormat = android.media.AudioFormat.Builder()
                      .setEncoding(this.audioFormat)
                      .setSampleRate(sampleRateInHz)
                      .setChannelMask(channelConfig)
                      .build()
 
-                 systemAudioRecord = audioRecordConstructor.newInstance(
-                     audioAttributes,
-                     audioFormat,
-                     numBytes * 2,
-                     AudioManager.AUDIO_SESSION_ID_GENERATE
-                 )
+                 if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                    // For Android Q+, use the constructor that accepts AudioPlaybackCaptureConfiguration
+                    val projection = mediaProjection
+                    if (projection != null) {
+                        val config = AudioPlaybackCaptureConfiguration.Builder(projection)
+                            .addMatchingUsage(AudioAttributes.USAGE_MEDIA)
+                            .addMatchingUsage(AudioAttributes.USAGE_GAME)
+                            .addMatchingUsage(AudioAttributes.USAGE_ASSISTANT)
+                            .build()
+
+                        // Use AudioRecord.Builder for better compatibility across API levels
+                        val audioRecordBuilder = AudioRecord.Builder()
+                            .setAudioFormat(audioFormat)
+                            .setBufferSizeInBytes(numBytes * 2)
+                            .setAudioPlaybackCaptureConfig(config)
+
+                        systemAudioRecord = audioRecordBuilder.build()
+                    } else {
+                        Log.e(TAG, "MediaProjection is null when trying to initialize system audio recording")
+                        runOnUiThread {
+                            Toast.makeText(this, "媒体投影未获取，无法初始化系统音频录制", Toast.LENGTH_LONG).show()
+                        }
+                        return@runOnUiThread
+                    }
+                } else {
+                     // Fallback for older Android versions (though system audio capture won't work)
+                     // Using reflection to access the constructor that accepts AudioAttributes
+                     val audioRecordConstructor = AudioRecord::class.java.getConstructor(
+                         AudioAttributes::class.java,
+                         android.media.AudioFormat::class.java,
+                         Integer.TYPE,
+                         Integer.TYPE
+                     )
+
+                     systemAudioRecord = audioRecordConstructor.newInstance(
+                         audioAttributes,
+                         audioFormat,
+                         numBytes * 2,
+                         AudioManager.AUDIO_SESSION_ID_GENERATE
+                     )
+                 }
                  
                  
 
@@ -154,9 +183,9 @@ class MainActivity : AppCompatActivity() {
                  }
                  Log.i(TAG, "Started system audio recording")
              } catch (e: Exception) {
-                 Log.e(TAG, "Error initializing system audio recording: ${e.message}")
+                 Log.e(TAG, "Error initializing system audio recording: ${e.message},${e.stackTrace.contentToString()}")
                  runOnUiThread {
-                     Toast.makeText(this, "系统音频录制初始化失败: ${e.message}", Toast.LENGTH_LONG).show()
+                     Toast.makeText(this, "系统音频录制初始化失败: ${e.message},${e.stackTrace.contentToString()}", Toast.LENGTH_LONG).show()
                  }
              }
          }
@@ -310,7 +339,7 @@ class MainActivity : AppCompatActivity() {
                     }
                     startForegroundService(serviceIntent)
                 } else {
-                    Log.e(TAG, "Media projection denied or failed")
+                    Log.e(TAG, "媒体投影被拒绝或失败")
                     runOnUiThread {
                         Toast.makeText(this, "媒体投影被拒绝或失败", Toast.LENGTH_LONG).show()
                     }
