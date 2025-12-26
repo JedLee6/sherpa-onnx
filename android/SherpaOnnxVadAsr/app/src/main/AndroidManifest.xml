@@ -5,6 +5,9 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+    <!-- Additional permissions for system audio capture -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
 
     <application
         android:allowBackup="true"
@@ -33,6 +36,11 @@
         
         <activity
             android:name=".SettingsActivity"
+            android:exported="false" />
+            
+        <service
+            android:name=".MediaProjectionService"
+            android:foregroundServiceType="mediaProjection"
             android:exported="false" />
     </application>
 
