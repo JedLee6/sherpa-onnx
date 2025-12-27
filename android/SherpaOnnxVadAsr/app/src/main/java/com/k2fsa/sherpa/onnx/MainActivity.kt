@@ -1132,4 +1132,116 @@ class MainActivity : AppCompatActivity() {
 
         return paddedSamples
     }
+
+    /**
+     * 使用Semaphore控制并发数量处理多个音频段
+     * @param segments 音频段列表，包含起始索引和样本数据
+     * @param maxConcurrent 最大并发数
+     * @param originalSamples 原始完整音频样本（用于添加padding）
+     * @return 处理结果列表
+     */
+    private suspend fun processSegmentsWithSemaphore(
+        segments: List<SegmentWithIndex>,
+        maxConcurrent: Int = 4,
+        originalSamples: FloatArray
+    ): List<TranscriptionResult> {
+        // 创建Semaphore，限制最大并发数
+        val semaphore = java.util.concurrent.Semaphore(maxConcurrent)
+        val results = mutableListOf<TranscriptionResult>()
+        val coroutineScope = CoroutineScope(Dispatchers.Default)
+        val deferredResults = mutableListOf<Deferred<TranscriptionResult?>>()
+
+        // 计算每个音频段的时间戳
+        fun getTimeStamp(sampleIndex: Int): String {
+            val seconds = sampleIndex / sampleRateInHz
+            val minutes = seconds / 60
+            val remainingSeconds = seconds % 60
+            val milliseconds = (sampleIndex % sampleRateInHz) * 1000 / sampleRateInHz
+            return String.format("%02d:%02d.%03d", minutes, remainingSeconds, milliseconds)
+        }
+
+        // 为每个音频段创建一个Deferred任务
+        for (segment in segments) {
+            val deferred = coroutineScope.async {
+                try {
+                    // 获取Semaphore许可
+                    semaphore.acquire()
+                    Log.d(TAG, "Processing segment starting at index ${segment.start}")
+                    
+                    // 添加padding到音频段
+                    val paddedSamples = addPaddingToSegmentWithAudioAndSilence(
+                        segment.paddedSamples,
+                        segment.start,
+                        originalSamples
+                    )
+                    
+                    // 处理音频段
+                    val text = runSecondPass(paddedSamples)
+                    
+                    // 计算时间戳
+                    val startTimeStamp = getTimeStamp(segment.start)
+                    val endTimeStamp = getTimeStamp(segment.start + segment.paddedSamples.size)
+                    
+                    Log.d(TAG, "Finished processing segment starting at index ${segment.start}: $text")
+                    
+                    // 返回结果
+                    TranscriptionResult(segment.start, text, startTimeStamp, endTimeStamp)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error processing segment starting at index ${segment.start}", e)
+                    null
+                } finally {
+                    // 释放Semaphore许可
+                    semaphore.release()
+                }
+            }
+            deferredResults.add(deferred)
+        }
+
+        // 等待所有任务完成并收集结果
+        deferredResults.forEach { deferred ->
+            val result = deferred.await()
+            if (result != null) {
+                results.add(result)
+            }
+        }
+
+        // 按音频段起始索引排序结果
+        results.sortBy { it.startIndex }
+        
+        // 取消协程作用域
+        coroutineScope.cancel()
+        
+        return results
+    }
+
+    /**
+     * 示例：如何使用processSegmentsWithSemaphore函数
+     * 假设segments是通过VAD拆分的音频段列表
+     */
+    private fun exampleUsage() {
+        // 假设这是通过VAD拆分的60个音频段
+        val segments: List<SegmentWithIndex> = emptyList() // 实际应用中替换为真实的音频段列表
+        val originalSamples: FloatArray = FloatArray(0) // 实际应用中替换为原始完整音频样本
+        val maxConcurrent = 8
+
+        val coroutineScope = CoroutineScope(Dispatchers.Main)
+        coroutineScope.launch {
+            // 更新UI显示处理开始
+            textView.text = "开始处理音频段..."
+            
+            val startTime = System.currentTimeMillis()
+            val results = processSegmentsWithSemaphore(segments, maxConcurrent, originalSamples)
+            val endTime = System.currentTimeMillis()
+            
+            // 处理完成，更新UI显示结果
+            val totalTime = (endTime - startTime) / 1000.0
+            var resultText = "处理完成！共耗时 ${totalTime} 秒\n\n"
+            
+            for ((index, result) in results.withIndex()) {
+                resultText += "${index + 1}. [${result.startTimeStamp} - ${result.endTimeStamp}]: ${result.text}\n"
+            }
+            
+            textView.text = resultText
+        }
+    }
 }
