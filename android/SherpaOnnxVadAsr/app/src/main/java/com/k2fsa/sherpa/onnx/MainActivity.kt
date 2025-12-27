@@ -35,9 +35,12 @@ import com.k2fsa.sherpa.onnx.getFeatureConfig
 import com.k2fsa.sherpa.onnx.getOfflineModelConfig
 import com.k2fsa.sherpa.onnx.getVadModelConfig
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
@@ -50,6 +53,8 @@ import android.media.AudioAttributes
 import android.media.AudioPlaybackCaptureConfiguration
 import android.media.projection.MediaProjection
 import com.k2fsa.sherpa.onnx.MediaProjectionService
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.awaitAll
 import java.lang.reflect.Method
 import kotlin.math.max
 
@@ -676,16 +681,15 @@ class MainActivity : AppCompatActivity() {
                 // Decode the WAV file to get the audio samples
                 val samples = decodeWavFile(audioFile)
 
-                // Use VAD to split the audio into segments and process each segment
+                // Use VAD to split the audio into segments first
                 vad.reset()
 
                 // Process the samples in chunks, similar to how real-time recording works
                 val chunkSize = 512 // Use the same buffer size as in processSamples
                 var startIndex = 0
 
-                // 计算总块数用于进度计算
-                val totalChunks = kotlin.math.ceil(samples.size.toDouble() / chunkSize).toInt()
-                var processedChunks = 0
+                // 收集所有VAD检测到的语音段
+                val allSegments = mutableListOf<SegmentWithIndex>()
 
                 while (startIndex < samples.size) {
                     val endIndex = kotlin.math.min(startIndex + chunkSize, samples.size)
@@ -693,76 +697,93 @@ class MainActivity : AppCompatActivity() {
 
                     vad.acceptWaveform(chunk)
 
-                    // Process any available segments immediately
+                    // 收集所有可用的语音段
                     while (!vad.empty()) {
                         val segment = vad.front()
                         // 按要求处理音频段：先添加0.09秒实际音频内容，再添加0.3秒静音
                         val paddedSamples = addPaddingToSegmentWithAudioAndSilence(segment.samples, segment.start, samples)
                         
-                        // 计算原始语音段的开始和结束时间戳（不包括padding）
-                        val segmentEndIndex = segment.start + segment.samples.size
-                        val startTimeStamp = sampleIndexToSrtTimestamp(segment.start)
-                        val endTimeStamp = sampleIndexToSrtTimestamp(segmentEndIndex)
-                        
-                        val text = runSecondPass(paddedSamples)
-                        if (text.isNotBlank()) {
-                            // Add a period to the end of the text if it doesn't already have one
-                            val formattedText = if (text.endsWith('.') || text.endsWith('。') || text.endsWith('!') || text.endsWith('?') || text.endsWith('！') || text.endsWith('？')) {
-                                text
-                            } else {
-                                "$text。"
-                            }
-                            // 计算进度百分比和耗时
-                            val progress = kotlin.math.min(((processedChunks.toDouble() / totalChunks) * 100).toInt(), 100)
-                            val elapsedTime = (System.currentTimeMillis() - startTime) / 1000.0
-                            val formattedOutput = String.format("[时间戳: %s --> %s, 进度: %d%%, 耗时: %.1f秒] %s", startTimeStamp, endTimeStamp, progress, elapsedTime, formattedText)
-                            runOnUiThread {
-                                lastText = "${lastText}\n音频文件识别结果: $formattedOutput"
-                                idx += 1
-                                textView.append("\n音频文件识别结果: $formattedOutput")
-                            }
-                        }
+                        // 保存语音段及其原始索引位置
+                        allSegments.add(SegmentWithIndex(segment.start, paddedSamples))
                         vad.pop()
                     }
 
                     startIndex = endIndex
-                    processedChunks++
                 }
 
                 // Flush any remaining samples
                 vad.flush()
 
-                // Process any remaining segments after flushing
+                // 收集剩余的语音段
                 while (!vad.empty()) {
                     val segment = vad.front()
-                    // 按要求处理音频段：先添加0.09秒实际音频内容，再添加0.3秒静音
                     val paddedSamples = addPaddingToSegmentWithAudioAndSilence(segment.samples, segment.start, samples)
-                    
-                    // 计算原始语音段的开始和结束时间戳（不包括padding）
-                    val segmentEndIndex = segment.start + segment.samples.size
-                    val startTimeStamp = sampleIndexToSrtTimestamp(segment.start)
-                    val endTimeStamp = sampleIndexToSrtTimestamp(segmentEndIndex)
-                    
-                    val text = runSecondPass(paddedSamples)
-                    if (text.isNotBlank()) {
-                        // Add a period to the end of the text if it doesn't already have one
-                        val formattedText = if (text.endsWith('.') || text.endsWith('。') || text.endsWith('!') || text.endsWith('?') || text.endsWith('！') || text.endsWith('？')) {
-                            text
-                        } else {
-                            "$text。"
-                        }
-                        // 计算进度百分比和耗时
-                        val progress = 100 // 完成所有处理
-                        val elapsedTime = (System.currentTimeMillis() - startTime) / 1000.0
-                        val formattedOutput = String.format("[时间戳: %s --> %s, 进度: %d%%, 耗时: %.1f秒] %s", startTimeStamp, endTimeStamp, progress, elapsedTime, formattedText)
-                        runOnUiThread {
-                            lastText = "${lastText}\n音频文件识别结果: $formattedOutput"
-                            idx += 1
-                            textView.append("\n音频文件识别结果: $formattedOutput")
-                        }
-                    }
+                    allSegments.add(SegmentWithIndex(segment.start, paddedSamples))
                     vad.pop()
                 }
+
+                // 计算总段数
+                val totalSegments = allSegments.size
+                runOnUiThread {
+                    textView.append("\n共检测到 $totalSegments 个语音段，正在并行转录...")
+                }
+
+                // 使用协程并行处理所有语音段
+                val coroutineScope = CoroutineScope(Dispatchers.IO + Job())
+                val deferredResults = mutableListOf<Deferred<TranscriptionResult?>>()
+
+                for (segment in allSegments) {
+                    val deferred = coroutineScope.async {
+                        try {
+                            val text = runSecondPass(segment.paddedSamples)
+                            if (text.isNotBlank()) {
+                                // 格式化文本
+                                val formattedText = if (text.endsWith('.') || text.endsWith('。') || text.endsWith('!') || text.endsWith('?') || text.endsWith('！') || text.endsWith('？')) {
+                                    text
+                                } else {
+                                    "$text。"
+                                }
+                                
+                                // 计算该段的时间戳
+                                val segmentEndIndex = segment.start + (segment.paddedSamples.size - (sampleRateInHz * 0.39f).toInt()) // 减去添加的padding
+                                val startTimeStamp = sampleIndexToSrtTimestamp(segment.start)
+                                val endTimeStamp = sampleIndexToSrtTimestamp(segmentEndIndex)
+                                
+                                TranscriptionResult(segment.start, formattedText, startTimeStamp, endTimeStamp)
+                            } else {
+                                null
+                            }
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Error transcribing segment at ${segment.start}: ${e.message}", e)
+                            null
+                        }
+                    }
+                    deferredResults.add(deferred)
+                }
+
+                // 等待所有转录任务完成并收集结果
+                val results = runBlocking { deferredResults.awaitAll() }
+                
+                // 按原始顺序排序结果（尽管应该已经是顺序的，但保险起见）
+                val sortedResults = results.filterNotNull().sortedBy { it.startIndex }
+
+                // 输出结果
+                sortedResults.forEachIndexed { index, result ->
+                    // 计算进度百分比和耗时
+                    val progress = kotlin.math.min(((index + 1).toDouble() / totalSegments * 100).toInt(), 100)
+                    val elapsedTime = (System.currentTimeMillis() - startTime) / 1000.0
+                    val formattedOutput = String.format("[时间戳: %s --> %s, 进度: %d%%, 耗时: %.1f秒] %s", 
+                        result.startTimeStamp, result.endTimeStamp, progress, elapsedTime, result.text)
+                    
+                    runOnUiThread {
+                        lastText = "${lastText}\n音频文件识别结果: $formattedOutput"
+                        idx += 1
+                        textView.append("\n音频文件识别结果: $formattedOutput")
+                    }
+                }
+
+                // 清理协程作用域
+                coroutineScope.cancel()
 
                 // 最终完成信息
                 val finalElapsedTime = (System.currentTimeMillis() - startTime) / 1000.0
@@ -778,6 +799,31 @@ class MainActivity : AppCompatActivity() {
             }
         }.start()
     }
+
+    // 辅助类：存储带索引的语音段
+    private data class SegmentWithIndex(val start: Int, val paddedSamples: FloatArray) {
+        override fun equals(other: Any?): Boolean {
+            if (this === other) return true
+            if (javaClass != other?.javaClass) return false
+            other as SegmentWithIndex
+            if (start != other.start) return false
+            if (!paddedSamples.contentEquals(other.paddedSamples)) return false
+            return true
+        }
+        override fun hashCode(): Int {
+            var result = start
+            result = 31 * result + paddedSamples.contentHashCode()
+            return result
+        }
+    }
+
+    // 辅助类：存储转录结果
+    private data class TranscriptionResult(
+        val startIndex: Int,
+        val text: String,
+        val startTimeStamp: String,
+        val endTimeStamp: String
+    )
 
     private fun decodeWavFile(wavFile: File): FloatArray {
         // Read WAV file header and extract audio samples
