@@ -23,6 +23,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var tts: OfflineTts
     private lateinit var text: EditText
     private lateinit var sid: EditText
+    private lateinit var lang: EditText
     private lateinit var speed: EditText
     private lateinit var generate: Button
     private lateinit var play: Button
@@ -48,6 +49,7 @@ class MainActivity : AppCompatActivity() {
 
         text = findViewById(R.id.text)
         sid = findViewById(R.id.sid)
+        lang = findViewById(R.id.lang)
         speed = findViewById(R.id.speed)
 
         generate = findViewById(R.id.generate)
@@ -133,6 +135,8 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
+        val langStr = lang.text.toString().trim().ifBlank { "en" }
+
         track.pause()
         track.flush()
         track.play()
@@ -141,21 +145,15 @@ class MainActivity : AppCompatActivity() {
         generate.isEnabled = false
         stopped = false
         Thread {
-            val waveData = WaveReader.readWave(application.assets, "sherpa-onnx-zipvoice-distill-int8-zh-en-emilia/test_wavs/news-female.wav")
-            val audio = tts.generateWithConfig(
+            val audio = tts.generateWithConfigAndCallback(
                 text = textStr,
                 config = GenerationConfig(
-                    sid = sidInt, 
+                    sid = sidInt,
                     speed = speedFloat,
-                    referenceAudio = waveData.samples,
-                    referenceSampleRate = waveData.sampleRate,
-                    referenceText = "各位村民, 大家新年好! 近期, 湖北省武汉市等多个地区"
-                )
+                    extra = mapOf("lang" to langStr)
+                ),
+                callback = this::callback
             )
-
-            if (audio.samples.isNotEmpty() && !stopped) {
-                track.write(audio.samples, 0, audio.samples.size, AudioTrack.WRITE_BLOCKING)
-            }
 
             val filename = application.filesDir.absolutePath + "/generated.wav"
             val ok = audio.samples.size > 0 && audio.save(filename)
@@ -234,9 +232,8 @@ class MainActivity : AppCompatActivity() {
         // Example 2:
         // https://github.com/k2-fsa/sherpa-onnx/releases/tag/tts-models
         // https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-en_US-amy-low.tar.bz2
-        modelDir = "sherpa-onnx-zipvoice-distill-int8-zh-en-emilia"
-        lexicon = "lexicon.txt"
-        dataDir = "$modelDir/espeak-ng-data"
+        modelDir = "sherpa-onnx-supertonic-tts-int8-2026-03-06"
+        dataDir = null
 
         // Example 3:
         // https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-icefall-zh-aishell3.tar.bz2
@@ -319,13 +316,14 @@ class MainActivity : AppCompatActivity() {
 
         val config = OfflineTtsConfig(
             model = OfflineTtsModelConfig(
-                zipvoice = OfflineTtsZipVoiceModelConfig(
-                    encoder = "$modelDir/encoder.int8.onnx",
-                    decoder = "$modelDir/decoder.int8.onnx",
-                    vocoder = "vocos_24khz.onnx",
-                    lexicon = "$modelDir/lexicon.txt",
-                    tokens = "$modelDir/tokens.txt",
-                    dataDir = dataDir ?: ""
+                supertonic = OfflineTtsSupertonicModelConfig(
+                    durationPredictor = "$modelDir/duration_predictor.int8.onnx",
+                    textEncoder = "$modelDir/text_encoder.int8.onnx",
+                    vectorEstimator = "$modelDir/vector_estimator.int8.onnx",
+                    vocoder = "$modelDir/vocoder.int8.onnx",
+                    ttsJson = "$modelDir/tts.json",
+                    unicodeIndexer = "$modelDir/unicode_indexer.bin",
+                    voiceStyle = "$modelDir/voice.bin"
                 ),
                 numThreads = 2,
                 debug = true,

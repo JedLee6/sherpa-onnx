@@ -48,6 +48,27 @@
         app:layout_constraintRight_toRightOf="parent"
         app:layout_constraintTop_toBottomOf="@id/speed_label_hint" />
 
+    <TextView
+        android:id="@+id/lang_label_hint"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="3dp"
+        android:text="@string/lang_label"
+        android:gravity="center"
+        app:layout_constraintLeft_toLeftOf="parent"
+        app:layout_constraintRight_toRightOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/speed"/>
+    <EditText
+        android:id="@+id/lang"
+        android:layout_width="match_parent"
+        android:layout_height="60dp"
+        android:layout_marginTop="0dp"
+        android:hint="@string/lang_hint"
+        android:gravity="center"
+        app:layout_constraintLeft_toLeftOf="parent"
+        app:layout_constraintRight_toRightOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/lang_label_hint" />
+
     <EditText
         android:id="@+id/text"
         android:inputType="textMultiLine"
@@ -61,7 +82,7 @@
         android:hint="@string/text_hint"
         app:layout_constraintLeft_toLeftOf="parent"
         app:layout_constraintRight_toRightOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/speed" />
+        app:layout_constraintTop_toBottomOf="@id/lang" />
 
     <Button
         android:id="@+id/generate"
