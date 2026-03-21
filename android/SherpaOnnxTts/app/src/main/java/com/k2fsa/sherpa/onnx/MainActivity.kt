@@ -141,12 +141,21 @@ class MainActivity : AppCompatActivity() {
         generate.isEnabled = false
         stopped = false
         Thread {
-            val audio = tts.generateWithCallback(
+            val waveData = WaveReader.readWave(application.assets, "sherpa-onnx-zipvoice-distill-int8-zh-en-emilia/test_wavs/news-female.wav")
+            val audio = tts.generateWithConfig(
                 text = textStr,
-                sid = sidInt,
-                speed = speedFloat,
-                callback = this::callback
+                config = GenerationConfig(
+                    sid = sidInt, 
+                    speed = speedFloat,
+                    referenceAudio = waveData.samples,
+                    referenceSampleRate = waveData.sampleRate,
+                    referenceText = "各位村民, 大家新年好! 近期, 湖北省武汉市等多个地区"
+                )
             )
+
+            if (audio.samples.isNotEmpty() && !stopped) {
+                track.write(audio.samples, 0, audio.samples.size, AudioTrack.WRITE_BLOCKING)
+            }
 
             val filename = application.filesDir.absolutePath + "/generated.wav"
             val ok = audio.samples.size > 0 && audio.save(filename)
@@ -225,9 +234,9 @@ class MainActivity : AppCompatActivity() {
         // Example 2:
         // https://github.com/k2-fsa/sherpa-onnx/releases/tag/tts-models
         // https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-en_US-amy-low.tar.bz2
-        // modelDir = "vits-piper-en_US-amy-low"
-        // modelName = "en_US-amy-low.onnx"
-        // dataDir = "vits-piper-en_US-amy-low/espeak-ng-data"
+        modelDir = "sherpa-onnx-zipvoice-distill-int8-zh-en-emilia"
+        lexicon = "lexicon.txt"
+        dataDir = "$modelDir/espeak-ng-data"
 
         // Example 3:
         // https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-icefall-zh-aishell3.tar.bz2
@@ -308,19 +317,21 @@ class MainActivity : AppCompatActivity() {
             dataDir = "$newDir/$dataDir"
         }
 
-        val config = getOfflineTtsConfig(
-            modelDir = modelDir!!,
-            modelName = modelName ?: "",
-            acousticModelName = acousticModelName ?: "",
-            vocoder = vocoder ?: "",
-            voices = voices ?: "",
-            lexicon = lexicon ?: "",
-            dataDir = dataDir ?: "",
-            dictDir = "",
-            ruleFsts = ruleFsts ?: "",
-            ruleFars = ruleFars ?: "",
-            isKitten = isKitten,
-        )!!
+        val config = OfflineTtsConfig(
+            model = OfflineTtsModelConfig(
+                zipvoice = OfflineTtsZipVoiceModelConfig(
+                    encoder = "$modelDir/encoder.int8.onnx",
+                    decoder = "$modelDir/decoder.int8.onnx",
+                    vocoder = "vocos_24khz.onnx",
+                    lexicon = "$modelDir/lexicon.txt",
+                    tokens = "$modelDir/tokens.txt",
+                    dataDir = dataDir ?: ""
+                ),
+                numThreads = 2,
+                debug = true,
+                provider = "cpu"
+            )
+        )
 
         tts = OfflineTts(assetManager = assets, config = config)
     }
