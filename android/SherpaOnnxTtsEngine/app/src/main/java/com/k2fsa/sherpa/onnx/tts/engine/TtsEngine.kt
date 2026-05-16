@@ -151,6 +151,12 @@ object TtsEngine {
             currentDataDir = "$newDir/$currentDataDir"
         }
 
+        var currentDictDir = config.dictDir
+        if (currentDictDir.isNotEmpty()) {
+            val newDir = copyDataDir(context, currentDictDir)
+            currentDictDir = "$newDir/$currentDictDir"
+        }
+
         val ttsConfig = getOfflineTtsConfig(
             modelDir = modelDir!!,
             modelName = modelName ?: "",
@@ -159,7 +165,7 @@ object TtsEngine {
             voices = voices ?: "",
             lexicon = lexicon ?: "",
             dataDir = currentDataDir ?: "",
-            dictDir = "",
+            dictDir = currentDictDir,
             ruleFsts = ruleFsts ?: "",
             ruleFars = ruleFars ?: "",
             isKitten = isKitten,

@@ -19,7 +19,8 @@ data class ModelConfig(
     val ttsJson: String = "",
     val unicodeIndexer: String = "",
     val voiceStyle: String = "",
-    val supertonicLang: String = ""
+    val supertonicLang: String = "",
+    val dictDir: String = ""
 )
 
 object Models {
@@ -61,7 +62,8 @@ object Models {
             acousticModelName = "model-steps-3.onnx",
             vocoder = "vocos-22khz-univ.onnx",
             lexicon = "lexicon.txt",
-            lang = "zho"
+            lang = "zho",
+            dictDir = "matcha-icefall-zh-baker/dict"
         )
     )
 
