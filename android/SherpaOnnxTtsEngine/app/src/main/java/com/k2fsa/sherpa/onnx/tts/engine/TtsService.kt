@@ -158,9 +158,14 @@ class TtsService : TextToSpeechService() {
         }
 
         Log.i(TAG, "text: $text")
+        val genConfig = GenerationConfig(sid = TtsEngine.speakerId, speed = engineSpeed)
+        if (TtsEngine.isSupertonic) {
+            genConfig.extra = mapOf("lang" to TtsEngine.supertonicLang)
+        }
+
         tts.generateWithConfigAndCallback(
             text = text,
-            config = GenerationConfig(sid = TtsEngine.speakerId, speed = engineSpeed),
+            config = genConfig,
             callback = ttsCallback,
         )
 

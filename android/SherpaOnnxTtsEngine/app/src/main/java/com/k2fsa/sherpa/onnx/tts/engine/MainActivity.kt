@@ -29,7 +29,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -112,9 +115,64 @@ class MainActivity : ComponentActivity() {
                                     )
                                 }
 
-                                val testTextContent = getSampleText(TtsEngine.lang ?: "")
+                                if (TtsEngine.isSupertonic) {
+                                    var expanded by remember { mutableStateOf(false) }
+                                    ExposedDropdownMenuBox(
+                                        expanded = expanded,
+                                        onExpandedChange = { expanded = !expanded },
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(bottom = 16.dp)
+                                    ) {
+                                        OutlinedTextField(
+                                            value = Languages.getName(TtsEngine.supertonicLang),
+                                            onValueChange = {},
+                                            readOnly = true,
+                                            label = { Text("Language") },
+                                            trailingIcon = {
+                                                ExposedDropdownMenuDefaults.TrailingIcon(
+                                                    expanded = expanded
+                                                )
+                                            },
+                                            colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
+                                            modifier = Modifier
+                                                .menuAnchor()
+                                                .fillMaxWidth()
+                                        )
+                                        ExposedDropdownMenu(
+                                            expanded = expanded,
+                                            onDismissRequest = { expanded = false }
+                                        ) {
+                                            Languages.supportedLanguages.forEach { language ->
+                                                DropdownMenuItem(
+                                                    text = { Text(language.name) },
+                                                    onClick = {
+                                                        TtsEngine.supertonicLang = language.code
+                                                        preferenceHelper.setLanguage(language.code)
+                                                        expanded = false
+                                                    }
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
 
-                                var testText by remember { mutableStateOf(testTextContent) }
+                                val testTextContent = getSampleText(
+                                    if (TtsEngine.isSupertonic) Languages.getIso3Code(
+                                        TtsEngine.supertonicLang
+                                    ) else (TtsEngine.lang ?: "")
+                                )
+
+                                var testText by remember { mutableStateOf("") }
+
+                                // Update testText when the language changes
+                                androidx.compose.runtime.LaunchedEffect(TtsEngine.supertonicLangState.value) {
+                                    testText = getSampleText(
+                                        if (TtsEngine.isSupertonic) Languages.getIso3Code(
+                                            TtsEngine.supertonicLang
+                                        ) else (TtsEngine.lang ?: "")
+                                    )
+                                }
                                 var startEnabled by remember { mutableStateOf(true) }
                                 var playEnabled by remember { mutableStateOf(false) }
                                 var saveEnabled by remember { mutableStateOf(false) }

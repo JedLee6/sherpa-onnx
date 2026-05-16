@@ -7,6 +7,7 @@ import android.util.Log
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import com.k2fsa.sherpa.onnx.OfflineTts
 import com.k2fsa.sherpa.onnx.getOfflineTtsConfig
 import java.io.File
@@ -30,7 +31,13 @@ object TtsEngine {
     var lang2: String? = null
 
     // for Supertonic TTS: language code in ISO 639-1 format, e.g., "en", "zh", "ja"
-    var supertonicLang: String = "en"
+    val supertonicLangState: MutableState<String> = mutableStateOf("en")
+
+    var supertonicLang: String
+        get() = supertonicLangState.value
+        set(value) {
+            supertonicLangState.value = value
+        }
 
 
     val speedState: MutableState<Float> = mutableFloatStateOf(1.0F)
@@ -223,6 +230,10 @@ object TtsEngine {
         }
     }
 
+    fun updateTts(context: Context) {
+        initTts(context)
+    }
+
     private fun initTts(context: Context) {
         assets = context.assets
 
@@ -255,6 +266,7 @@ object TtsEngine {
 
         speed = PreferenceHelper(context).getSpeed()
         speakerId = PreferenceHelper(context).getSid()
+        supertonicLang = PreferenceHelper(context).getLanguage()
 
         tts = OfflineTts(assetManager = assets, config = config)
     }
