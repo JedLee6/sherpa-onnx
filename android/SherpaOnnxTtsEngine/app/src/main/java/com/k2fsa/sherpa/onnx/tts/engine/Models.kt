@@ -43,7 +43,7 @@ object Models {
             name = "xiao_ya-medium (VITS)",
             modelDir = "vits-piper-zh_CN-xiao_ya-medium",
             modelName = "zh_CN-xiao_ya-medium.onnx",
-            dataDir = "vits-piper-zh_CN-xiao_ya-medium/espeak-ng-data",
+            lexicon = "lexicon.txt",
             lang = "zho"
         ),
         ModelConfig(
@@ -51,7 +51,7 @@ object Models {
             name = "chaowen-medium (VITS)",
             modelDir = "vits-piper-zh_CN-chaowen-medium",
             modelName = "zh_CN-chaowen-medium.onnx",
-            dataDir = "vits-piper-zh_CN-chaowen-medium/espeak-ng-data",
+            lexicon = "lexicon.txt",
             lang = "zho"
         ),
         ModelConfig(

@@ -99,10 +99,32 @@ object TtsEngine {
     }
 
     private fun initTts(context: Context) {
+        val preferenceHelper = PreferenceHelper(context)
+        val modelId = preferenceHelper.getModel()
+
+        try {
+            realInitTts(context, modelId)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to initialize model $modelId: $e")
+            if (modelId != "supertonic-3-tts") {
+                Log.i(TAG, "Falling back to default model supertonic-3-tts")
+                preferenceHelper.setModel("supertonic-3-tts")
+                try {
+                    realInitTts(context, "supertonic-3-tts")
+                } catch (e2: Exception) {
+                    Log.e(TAG, "Even default model failed: $e2")
+                    tts = null
+                }
+            } else {
+                tts = null
+            }
+        }
+    }
+
+    private fun realInitTts(context: Context, modelId: String) {
         assets = context.assets
 
         val preferenceHelper = PreferenceHelper(context)
-        val modelId = preferenceHelper.getModel()
         val config = Models.getModel(modelId)
         currentModel = config
 
@@ -123,9 +145,10 @@ object TtsEngine {
         unicodeIndexer = config.unicodeIndexer
         voiceStyle = config.voiceStyle
 
-        if (dataDir != null && dataDir!!.isNotEmpty()) {
-            val newDir = copyDataDir(context, dataDir!!)
-            dataDir = "$newDir/$dataDir"
+        var currentDataDir = dataDir
+        if (currentDataDir != null && currentDataDir.isNotEmpty()) {
+            val newDir = copyDataDir(context, currentDataDir)
+            currentDataDir = "$newDir/$currentDataDir"
         }
 
         val ttsConfig = getOfflineTtsConfig(
@@ -135,7 +158,7 @@ object TtsEngine {
             vocoder = vocoder ?: "",
             voices = voices ?: "",
             lexicon = lexicon ?: "",
-            dataDir = dataDir ?: "",
+            dataDir = currentDataDir ?: "",
             dictDir = "",
             ruleFsts = ruleFsts ?: "",
             ruleFars = ruleFars ?: "",
@@ -152,7 +175,7 @@ object TtsEngine {
 
         speed = preferenceHelper.getSpeed()
         speakerId = preferenceHelper.getSid()
-        
+
         if (isSupertonic) {
             supertonicLang = preferenceHelper.getLanguage(config.supertonicLang)
         }
