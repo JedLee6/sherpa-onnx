@@ -93,6 +93,11 @@ object Models {
                 "matcha-icefall-zh-baker/lexicon.txt",
                 "matcha-icefall-zh-baker/tokens.txt",
                 "vocos-22khz-univ.onnx",
+                "matcha-icefall-zh-baker/phone.fst",
+                "matcha-icefall-zh-baker/date.fst",
+                "matcha-icefall-zh-baker/number.fst",
+                "matcha-icefall-zh-baker/dict/jieba.dict.utf8",
+                "matcha-icefall-zh-baker/dict/hmm_model.utf8"
             )
         )
     )
