@@ -159,6 +159,7 @@ object TtsEngine {
         ttsJson = config.ttsJson
         unicodeIndexer = config.unicodeIndexer
         voiceStyle = config.voiceStyle
+        ruleFsts = config.ruleFsts
 
         var currentDataDir = dataDir
         if (currentDataDir != null && currentDataDir.isNotEmpty()) {
@@ -193,6 +194,7 @@ object TtsEngine {
             unicodeIndexer = unicodeIndexer ?: "",
             voiceStyle = voiceStyle ?: "",
         )
+
 
         speed = preferenceHelper.getSpeed()
         speakerId = preferenceHelper.getSid()

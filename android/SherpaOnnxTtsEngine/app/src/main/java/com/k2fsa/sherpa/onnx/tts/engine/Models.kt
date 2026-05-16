@@ -21,6 +21,7 @@ data class ModelConfig(
     val voiceStyle: String = "",
     val supertonicLang: String = "",
     val dictDir: String = "",
+    val ruleFsts: String = "",
     // List of asset file paths (relative to assets/) that must exist for this model to load.
     // Used for pre-validation before native initialization.
     val requiredFiles: List<String> = emptyList()
@@ -77,26 +78,23 @@ object Models {
                 "vits-piper-zh_CN-chaowen-medium/tokens.txt",
             )
         ),
-        // NOTE: matcha-icefall-zh-baker is excluded because its vocoder file
-        // (vocos-22khz-univ.onnx) is missing from the app assets.
-        // Uncomment this once the vocoder is added to the assets.
-        //
-        // ModelConfig(
-        //     id = "matcha-icefall-zh-baker",
-        //     name = "zh-baker (Matcha)",
-        //     modelDir = "matcha-icefall-zh-baker",
-        //     acousticModelName = "model-steps-3.onnx",
-        //     vocoder = "vocos-22khz-univ.onnx",
-        //     lexicon = "lexicon.txt",
-        //     lang = "zho",
-        //     dictDir = "matcha-icefall-zh-baker/dict",
-        //     requiredFiles = listOf(
-        //         "matcha-icefall-zh-baker/model-steps-3.onnx",
-        //         "matcha-icefall-zh-baker/lexicon.txt",
-        //         "matcha-icefall-zh-baker/tokens.txt",
-        //         "vocos-22khz-univ.onnx",
-        //     )
-        // )
+        ModelConfig(
+            id = "matcha-icefall-zh-baker",
+            name = "zh-baker (Matcha)",
+            modelDir = "matcha-icefall-zh-baker",
+            acousticModelName = "model-steps-3.onnx",
+            vocoder = "vocos-22khz-univ.onnx",
+            lexicon = "lexicon.txt",
+            lang = "zho",
+            dictDir = "matcha-icefall-zh-baker/dict",
+            ruleFsts = "matcha-icefall-zh-baker/phone.fst,matcha-icefall-zh-baker/date.fst,matcha-icefall-zh-baker/number.fst",
+            requiredFiles = listOf(
+                "matcha-icefall-zh-baker/model-steps-3.onnx",
+                "matcha-icefall-zh-baker/lexicon.txt",
+                "matcha-icefall-zh-baker/tokens.txt",
+                "vocos-22khz-univ.onnx",
+            )
+        )
     )
 
     fun getModel(id: String): ModelConfig {
