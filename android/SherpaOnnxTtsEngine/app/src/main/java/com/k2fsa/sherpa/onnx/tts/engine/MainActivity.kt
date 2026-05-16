@@ -102,6 +102,46 @@ class MainActivity : ComponentActivity() {
                     }) {
                         Box(modifier = Modifier.padding(it)) {
                             Column(modifier = Modifier.padding(16.dp)) {
+                                var expandedModel by remember { mutableStateOf(false) }
+                                ExposedDropdownMenuBox(
+                                    expanded = expandedModel,
+                                    onExpandedChange = { expandedModel = !expandedModel },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(bottom = 16.dp)
+                                ) {
+                                    OutlinedTextField(
+                                        value = TtsEngine.currentModel.name,
+                                        onValueChange = {},
+                                        readOnly = true,
+                                        label = { Text("Model") },
+                                        trailingIcon = {
+                                            ExposedDropdownMenuDefaults.TrailingIcon(
+                                                expanded = expandedModel
+                                            )
+                                        },
+                                        colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
+                                        modifier = Modifier
+                                            .menuAnchor()
+                                            .fillMaxWidth()
+                                    )
+                                    ExposedDropdownMenu(
+                                        expanded = expandedModel,
+                                        onDismissRequest = { expandedModel = false }
+                                    ) {
+                                        Models.supportedModels.forEach { model ->
+                                            DropdownMenuItem(
+                                                text = { Text(model.name) },
+                                                onClick = {
+                                                    preferenceHelper.setModel(model.id)
+                                                    TtsEngine.updateTts(context)
+                                                    expandedModel = false
+                                                }
+                                            )
+                                        }
+                                    }
+                                }
+
                                 Column {
                                     Text("Speed " + String.format("%.1f", TtsEngine.speed))
                                     Slider(
@@ -165,8 +205,11 @@ class MainActivity : ComponentActivity() {
 
                                 var testText by remember { mutableStateOf("") }
 
-                                // Update testText when the language changes
-                                androidx.compose.runtime.LaunchedEffect(TtsEngine.supertonicLangState.value) {
+                                // Update testText when the language or model changes
+                                androidx.compose.runtime.LaunchedEffect(
+                                    TtsEngine.supertonicLangState.value,
+                                    TtsEngine.modelState.value
+                                ) {
                                     testText = getSampleText(
                                         if (TtsEngine.isSupertonic) Languages.getIso3Code(
                                             TtsEngine.supertonicLang

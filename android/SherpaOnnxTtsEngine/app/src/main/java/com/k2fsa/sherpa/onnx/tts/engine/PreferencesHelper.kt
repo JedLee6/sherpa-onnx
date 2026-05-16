@@ -7,6 +7,7 @@ class PreferenceHelper(context: Context) {
     private val SPEED_KEY = "speed"
     private val SID_KEY = "speaker_id"
     private val LANG_KEY = "language"
+    private val MODEL_KEY = "model_id"
 
     private val sharedPreferences: SharedPreferences =
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -39,5 +40,15 @@ class PreferenceHelper(context: Context) {
 
     fun getLanguage(defaultValue: String = "en"): String {
         return sharedPreferences.getString(LANG_KEY, defaultValue) ?: defaultValue
+    }
+
+    fun setModel(value: String) {
+        val editor = sharedPreferences.edit()
+        editor.putString(MODEL_KEY, value)
+        editor.apply()
+    }
+
+    fun getModel(defaultValue: String = "supertonic-3-tts"): String {
+        return sharedPreferences.getString(MODEL_KEY, defaultValue) ?: defaultValue
     }
 }
