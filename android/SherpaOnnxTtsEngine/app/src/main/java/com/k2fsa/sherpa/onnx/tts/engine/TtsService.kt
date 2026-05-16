@@ -60,7 +60,13 @@ class TtsService : TextToSpeechService() {
         super.onCreate()
 
         // see https://github.com/Miserlou/Android-SDK-Samples/blob/master/TtsEngine/src/com/example/android/ttsengine/RobotSpeakTtsService.java#L68
-        onLoadLanguage(TtsEngine.lang, "", "")
+        val currentLang = TtsEngine.lang
+        if (currentLang != null) {
+            onLoadLanguage(currentLang, "", "")
+        } else {
+            Log.w(TAG, "TtsEngine.lang is null during TtsService.onCreate, skipping onLoadLanguage")
+            TtsEngine.createTts(application)
+        }
         if (TtsEngine.lang2 != null) {
             onLoadLanguage(TtsEngine.lang2, "", "")
         }
@@ -83,7 +89,7 @@ class TtsService : TextToSpeechService() {
     }
 
     override fun onGetLanguage(): Array<String> {
-        return arrayOf(TtsEngine.lang!!, "", "")
+        return arrayOf(TtsEngine.lang ?: "eng", "", "")
     }
 
     // https://developer.android.com/reference/kotlin/android/speech/tts/TextToSpeechService#onLoadLanguage(kotlin.String,%20kotlin.String,%20kotlin.String)

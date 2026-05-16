@@ -119,6 +119,11 @@ object TtsEngine {
                 tts = null
             }
         }
+
+        // Ensure lang is never null after init, so TtsService doesn't crash
+        if (lang == null) {
+            lang = "eng"
+        }
     }
 
     private fun realInitTts(context: Context, modelId: String) {
@@ -126,6 +131,16 @@ object TtsEngine {
 
         val preferenceHelper = PreferenceHelper(context)
         val config = Models.getModel(modelId)
+
+        // Pre-validate: check all required files exist in assets BEFORE native init.
+        // Native crashes (SIGSEGV) from missing files cannot be caught by try-catch.
+        if (!validateModelAssets(context, config)) {
+            throw IllegalStateException(
+                "Model '${config.name}' is missing required asset files. " +
+                "Cannot initialize safely."
+            )
+        }
+
         currentModel = config
 
         modelDir = config.modelDir
@@ -187,6 +202,27 @@ object TtsEngine {
         }
 
         tts = OfflineTts(assetManager = assets, config = ttsConfig)
+    }
+
+    /**
+     * Pre-validate that all required asset files for a model exist.
+     * This prevents native crashes (SIGSEGV) that cannot be caught by try-catch.
+     */
+    fun validateModelAssets(context: Context, config: ModelConfig): Boolean {
+        if (config.requiredFiles.isEmpty()) {
+            Log.w(TAG, "Model '${config.name}' has no requiredFiles list, skipping validation")
+            return true
+        }
+        for (file in config.requiredFiles) {
+            try {
+                context.assets.open(file).close()
+            } catch (e: IOException) {
+                Log.e(TAG, "Missing required asset file: $file for model '${config.name}'")
+                return false
+            }
+        }
+        Log.i(TAG, "All ${config.requiredFiles.size} required files validated for model '${config.name}'")
+        return true
     }
 
 

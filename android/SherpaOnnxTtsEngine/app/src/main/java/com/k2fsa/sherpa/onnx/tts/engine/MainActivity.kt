@@ -101,6 +101,7 @@ class MainActivity : ComponentActivity() {
                         TopAppBar(title = { Text("Next-gen Kaldi: TTS Engine") })
                     }) {
                         Box(modifier = Modifier.padding(it)) {
+                            val context = LocalContext.current
                             Column(modifier = Modifier.padding(16.dp)) {
                                 var expandedModel by remember { mutableStateOf(false) }
                                 ExposedDropdownMenuBox(
@@ -133,8 +134,16 @@ class MainActivity : ComponentActivity() {
                                             DropdownMenuItem(
                                                 text = { Text(model.name) },
                                                 onClick = {
-                                                    preferenceHelper.setModel(model.id)
-                                                    TtsEngine.updateTts(context)
+                                                    if (TtsEngine.validateModelAssets(context, model)) {
+                                                        preferenceHelper.setModel(model.id)
+                                                        TtsEngine.updateTts(context)
+                                                    } else {
+                                                        Toast.makeText(
+                                                            context,
+                                                            "Model '${model.name}' is missing required files and cannot be loaded.",
+                                                            Toast.LENGTH_LONG
+                                                        ).show()
+                                                    }
                                                     expandedModel = false
                                                 }
                                             )
@@ -224,8 +233,6 @@ class MainActivity : ComponentActivity() {
                                     mutableStateOf("")
                                 }
                                 val scrollState = rememberScrollState(0)
-
-                                val context = LocalContext.current
 
                                 val saveLauncher = rememberLauncherForActivityResult(
                                     contract = ActivityResultContracts.CreateDocument("audio/wav")

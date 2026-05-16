@@ -20,7 +20,10 @@ data class ModelConfig(
     val unicodeIndexer: String = "",
     val voiceStyle: String = "",
     val supertonicLang: String = "",
-    val dictDir: String = ""
+    val dictDir: String = "",
+    // List of asset file paths (relative to assets/) that must exist for this model to load.
+    // Used for pre-validation before native initialization.
+    val requiredFiles: List<String> = emptyList()
 )
 
 object Models {
@@ -37,7 +40,16 @@ object Models {
             ttsJson = "tts.json",
             unicodeIndexer = "unicode_indexer.bin",
             voiceStyle = "voice.bin",
-            supertonicLang = "en"
+            supertonicLang = "en",
+            requiredFiles = listOf(
+                "sherpa-onnx-supertonic-3-tts-int8-2026-05-11/duration_predictor.int8.onnx",
+                "sherpa-onnx-supertonic-3-tts-int8-2026-05-11/text_encoder.int8.onnx",
+                "sherpa-onnx-supertonic-3-tts-int8-2026-05-11/vector_estimator.int8.onnx",
+                "sherpa-onnx-supertonic-3-tts-int8-2026-05-11/vocoder.int8.onnx",
+                "sherpa-onnx-supertonic-3-tts-int8-2026-05-11/tts.json",
+                "sherpa-onnx-supertonic-3-tts-int8-2026-05-11/unicode_indexer.bin",
+                "sherpa-onnx-supertonic-3-tts-int8-2026-05-11/voice.bin",
+            )
         ),
         ModelConfig(
             id = "vits-piper-xiao_ya",
@@ -45,7 +57,12 @@ object Models {
             modelDir = "vits-piper-zh_CN-xiao_ya-medium",
             modelName = "zh_CN-xiao_ya-medium.onnx",
             lexicon = "lexicon.txt",
-            lang = "zho"
+            lang = "zho",
+            requiredFiles = listOf(
+                "vits-piper-zh_CN-xiao_ya-medium/zh_CN-xiao_ya-medium.onnx",
+                "vits-piper-zh_CN-xiao_ya-medium/lexicon.txt",
+                "vits-piper-zh_CN-xiao_ya-medium/tokens.txt",
+            )
         ),
         ModelConfig(
             id = "vits-piper-chaowen",
@@ -53,18 +70,33 @@ object Models {
             modelDir = "vits-piper-zh_CN-chaowen-medium",
             modelName = "zh_CN-chaowen-medium.onnx",
             lexicon = "lexicon.txt",
-            lang = "zho"
-        ),
-        ModelConfig(
-            id = "matcha-icefall-zh-baker",
-            name = "zh-baker (Matcha)",
-            modelDir = "matcha-icefall-zh-baker",
-            acousticModelName = "model-steps-3.onnx",
-            vocoder = "vocos-22khz-univ.onnx",
-            lexicon = "lexicon.txt",
             lang = "zho",
-            dictDir = "matcha-icefall-zh-baker/dict"
-        )
+            requiredFiles = listOf(
+                "vits-piper-zh_CN-chaowen-medium/zh_CN-chaowen-medium.onnx",
+                "vits-piper-zh_CN-chaowen-medium/lexicon.txt",
+                "vits-piper-zh_CN-chaowen-medium/tokens.txt",
+            )
+        ),
+        // NOTE: matcha-icefall-zh-baker is excluded because its vocoder file
+        // (vocos-22khz-univ.onnx) is missing from the app assets.
+        // Uncomment this once the vocoder is added to the assets.
+        //
+        // ModelConfig(
+        //     id = "matcha-icefall-zh-baker",
+        //     name = "zh-baker (Matcha)",
+        //     modelDir = "matcha-icefall-zh-baker",
+        //     acousticModelName = "model-steps-3.onnx",
+        //     vocoder = "vocos-22khz-univ.onnx",
+        //     lexicon = "lexicon.txt",
+        //     lang = "zho",
+        //     dictDir = "matcha-icefall-zh-baker/dict",
+        //     requiredFiles = listOf(
+        //         "matcha-icefall-zh-baker/model-steps-3.onnx",
+        //         "matcha-icefall-zh-baker/lexicon.txt",
+        //         "matcha-icefall-zh-baker/tokens.txt",
+        //         "vocos-22khz-univ.onnx",
+        //     )
+        // )
     )
 
     fun getModel(id: String): ModelConfig {
