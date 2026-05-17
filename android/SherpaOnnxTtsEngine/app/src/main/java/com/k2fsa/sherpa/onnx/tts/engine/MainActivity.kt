@@ -379,23 +379,7 @@ class MainActivity : ComponentActivity() {
                                                     val allSamples = mutableListOf<FloatArray>()
 
                                                     if (TtsEngine.isSupertonic) {
-                                                        val iterator = BreakIterator.getSentenceInstance(Locale.getDefault())
-                                                        iterator.setText(testText)
-                                                        val sentences = mutableListOf<String>()
-                                                        var start = iterator.first()
-                                                        var end = iterator.next()
-                                                        while (end != BreakIterator.DONE) {
-                                                            val sentence = testText.substring(start, end).trim()
-                                                            if (sentence.isNotEmpty()) {
-                                                                sentences.add(sentence)
-                                                            }
-                                                            start = end
-                                                            end = iterator.next()
-                                                        }
-                                                        if (sentences.isEmpty() && testText.isNotBlank()) {
-                                                            sentences.add(testText)
-                                                        }
-
+                                                        val sentences = TextSegmenter.splitText(testText)
                                                         val sentencesInfo = mutableListOf<String>()
 
                                                         for (sentence in sentences) {
