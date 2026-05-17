@@ -41,7 +41,7 @@ object TextSegmenter {
             val c = input[i]
             sb.append(c)
             
-            if (c == '.' || c == '?' || c == '!' || c == ';' || c == '\n') {
+            if (c == '.' || c == '?' || c == '!' || c == ';' || c == '\n' || c == ',' || c == '，' || c == '、') {
                 // Check if it's an abbreviation
                 if (c == '.') {
                     val currentStr = sb.toString().trim()
