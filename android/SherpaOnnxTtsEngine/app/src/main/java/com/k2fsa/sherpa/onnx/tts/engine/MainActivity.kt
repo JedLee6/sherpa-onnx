@@ -385,15 +385,24 @@ class MainActivity : ComponentActivity() {
                                                              Log.i(TAG, "Sentence: '$sentence', detected code: $detected, mapped iso1: $iso1")
                                                             sentencesInfo.add("[$iso1] $sentence")
 
-                                                            val genConfig = GenerationConfig(sid = TtsEngine.speakerId, speed = TtsEngine.speed)
-                                                            genConfig.extra = mapOf("lang" to iso1)
+                                                             val isChinese = (iso1 == "zh")
+                                                             val selectedTts = if (isChinese && TtsEngine.matchaTts != null) {
+                                                                 TtsEngine.matchaTts!!
+                                                             } else {
+                                                                 TtsEngine.supertonicTts ?: TtsEngine.tts!!
+                                                             }
 
-                                                            val audio = TtsEngine.tts!!.generateWithConfigAndCallback(
-                                                                text = sentence,
-                                                                config = genConfig,
-                                                                callback = ::callback,
-                                                            )
-                                                            allSamples.add(audio.samples)
+                                                             val genConfig = GenerationConfig(sid = TtsEngine.speakerId, speed = TtsEngine.speed)
+                                                             if (selectedTts == TtsEngine.supertonicTts || selectedTts != TtsEngine.matchaTts) {
+                                                                 genConfig.extra = mapOf("lang" to iso1)
+                                                             }
+
+                                                             val audio = selectedTts.generateWithConfigAndCallback(
+                                                                 text = sentence,
+                                                                 config = genConfig,
+                                                                 callback = ::callback,
+                                                             )
+                                                             allSamples.add(audio.samples)
                                                         }
                                                         val newLanguagesText = sentencesInfo.joinToString("\n")
                                                         withContext(Dispatchers.Main) {

@@ -7,6 +7,8 @@ import android.speech.tts.SynthesisRequest
 import android.speech.tts.TextToSpeech
 import android.speech.tts.TextToSpeechService
 import android.util.Log
+import com.google.mlkit.nl.languageid.LanguageIdentification
+import com.google.android.gms.tasks.Tasks
 
 /*
 https://developer.android.com/reference/java/util/Locale#getISO3Language()
@@ -55,6 +57,10 @@ Failed to get default language from engine com.k2fsa.sherpa.chapter5
 */
 
 class TtsService : TextToSpeechService() {
+    private val languageIdentifier by lazy {
+        LanguageIdentification.getClient()
+    }
+
     override fun onCreate() {
         Log.i(TAG, "onCreate tts service")
         super.onCreate()
@@ -134,13 +140,27 @@ class TtsService : TextToSpeechService() {
             callback.error()
             return
         }
-        Log.i(TAG, "text: $text, engineSpeed: $engineSpeed")
-        val tts = TtsEngine.tts!!
+        val detected = try {
+            Tasks.await(languageIdentifier.identifyLanguage(text))
+        } catch (e: Exception) {
+            Log.e(TAG, "Language identification failed in TtsService", e)
+            "und"
+        }
+        val iso1 = Languages.mapGoogleMlKitToIso1(detected) ?: TtsEngine.supertonicLang
+        val isChinese = (iso1 == "zh")
+
+        val selectedTts = if (isChinese && TtsEngine.matchaTts != null) {
+            TtsEngine.matchaTts!!
+        } else {
+            TtsEngine.supertonicTts ?: TtsEngine.tts!!
+        }
+
+        Log.i(TAG, "text: $text, engineSpeed: $engineSpeed, isChinese: $isChinese")
 
         // Note that AudioFormat.ENCODING_PCM_FLOAT requires API level >= 24
-        // callback.start(tts.sampleRate(), AudioFormat.ENCODING_PCM_FLOAT, 1)
+        // callback.start(selectedTts.sampleRate(), AudioFormat.ENCODING_PCM_FLOAT, 1)
 
-        callback.start(tts.sampleRate(), AudioFormat.ENCODING_PCM_16BIT, 1)
+        callback.start(selectedTts.sampleRate(), AudioFormat.ENCODING_PCM_16BIT, 1)
 
         if (text.isBlank() || text.isEmpty()) {
             callback.done()
@@ -165,11 +185,11 @@ class TtsService : TextToSpeechService() {
 
         Log.i(TAG, "text: $text")
         val genConfig = GenerationConfig(sid = TtsEngine.speakerId, speed = engineSpeed)
-        if (TtsEngine.isSupertonic) {
-            genConfig.extra = mapOf("lang" to TtsEngine.supertonicLang)
+        if (selectedTts == TtsEngine.supertonicTts || selectedTts != TtsEngine.matchaTts) {
+            genConfig.extra = mapOf("lang" to iso1)
         }
 
-        tts.generateWithConfigAndCallback(
+        selectedTts.generateWithConfigAndCallback(
             text = text,
             config = genConfig,
             callback = ttsCallback,

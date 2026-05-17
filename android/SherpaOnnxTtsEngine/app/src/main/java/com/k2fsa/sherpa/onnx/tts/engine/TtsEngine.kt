@@ -18,7 +18,14 @@ const val MIN_TTS_SPEED = 0.1f
 const val MAX_TTS_SPEED = 5.0f
 
 object TtsEngine {
-    var tts: OfflineTts? = null
+    var supertonicTts: OfflineTts? = null
+    var matchaTts: OfflineTts? = null
+
+    var tts: OfflineTts?
+        get() = if (currentModel.id == "matcha-icefall-zh-baker") matchaTts else (supertonicTts ?: matchaTts)
+        set(value) {
+            // Backwards compatibility
+        }
 
     // https://en.wikipedia.org/wiki/ISO_639-3
     // Example:
@@ -63,25 +70,8 @@ object TtsEngine {
             modelState.value = value
         }
 
-    private var modelDir: String? = null
-    private var modelName: String? = null
-    private var acousticModelName: String? = null // for matcha tts
-    private var vocoder: String? = null // for matcha tts
-    private var voices: String? = null // for kokoro
-    private var ruleFsts: String? = null
-    private var ruleFars: String? = null
-    private var lexicon: String? = null
-    private var dataDir: String? = null
-    private var assets: AssetManager? = null
-    private var isKitten = false
-    var isSupertonic = false
-    private var durationPredictor: String? = null
-    private var textEncoder: String? = null
-    private var vectorEstimator: String? = null
-    private var supertonicVocoder: String? = null
-    private var ttsJson: String? = null
-    private var unicodeIndexer: String? = null
-    private var voiceStyle: String? = null
+    val isSupertonic: Boolean
+        get() = currentModel.isSupertonic
 
     init {
         // Models are now dynamically loaded via PreferenceHelper and Models object
@@ -89,7 +79,7 @@ object TtsEngine {
 
     fun createTts(context: Context) {
         Log.i(TAG, "Init Next-gen Kaldi TTS")
-        if (tts == null) {
+        if (supertonicTts == null || matchaTts == null) {
             initTts(context)
         }
     }
@@ -102,23 +92,50 @@ object TtsEngine {
         val preferenceHelper = PreferenceHelper(context)
         val modelId = preferenceHelper.getModel()
 
+        // 1. Always pre-initialize supertonic-3-tts
         try {
-            realInitTts(context, modelId)
+            Log.i(TAG, "Pre-initializing supertonic-3-tts...")
+            val (engine, config) = loadModel(context, "supertonic-3-tts")
+            supertonicTts = engine
+            if (modelId == "supertonic-3-tts") {
+                currentModel = config
+                lang = config.lang
+            }
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to initialize model $modelId: $e")
-            if (modelId != "supertonic-3-tts") {
-                Log.i(TAG, "Falling back to default model supertonic-3-tts")
-                preferenceHelper.setModel("supertonic-3-tts")
-                try {
-                    realInitTts(context, "supertonic-3-tts")
-                } catch (e2: Exception) {
-                    Log.e(TAG, "Even default model failed: $e2")
-                    tts = null
-                }
-            } else {
-                tts = null
+            Log.e(TAG, "Failed to pre-initialize supertonic-3-tts", e)
+        }
+
+        // 2. Always pre-initialize matcha-icefall-zh-baker
+        try {
+            Log.i(TAG, "Pre-initializing matcha-icefall-zh-baker...")
+            val (engine, config) = loadModel(context, "matcha-icefall-zh-baker")
+            matchaTts = engine
+            if (modelId == "matcha-icefall-zh-baker") {
+                currentModel = config
+                lang = config.lang
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to pre-initialize matcha-icefall-zh-baker", e)
+        }
+
+        // 3. If selected model is neither of the above (e.g., VITS), load it dynamically
+        if (modelId != "supertonic-3-tts" && modelId != "matcha-icefall-zh-baker") {
+            try {
+                Log.i(TAG, "Initializing selected model: $modelId")
+                val (engine, config) = loadModel(context, modelId)
+                currentModel = config
+                lang = config.lang
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to initialize selected model $modelId: $e")
+                val config = Models.getModel("supertonic-3-tts")
+                currentModel = config
+                lang = config.lang
             }
         }
+
+        speed = preferenceHelper.getSpeed()
+        speakerId = preferenceHelper.getSid()
+        supertonicLang = preferenceHelper.getLanguage("en")
 
         // Ensure lang is never null after init, so TtsService doesn't crash
         if (lang == null) {
@@ -126,14 +143,9 @@ object TtsEngine {
         }
     }
 
-    private fun realInitTts(context: Context, modelId: String) {
-        assets = context.assets
-
-        val preferenceHelper = PreferenceHelper(context)
+    private fun loadModel(context: Context, modelId: String): Pair<OfflineTts?, ModelConfig> {
         val config = Models.getModel(modelId)
 
-        // Pre-validate: check all required files exist in assets BEFORE native init.
-        // Native crashes (SIGSEGV) from missing files cannot be caught by try-catch.
         if (!validateModelAssets(context, config)) {
             throw IllegalStateException(
                 "Model '${config.name}' is missing required asset files. " +
@@ -141,28 +153,8 @@ object TtsEngine {
             )
         }
 
-        currentModel = config
-
-        modelDir = config.modelDir
-        modelName = config.modelName
-        acousticModelName = config.acousticModelName
-        vocoder = config.vocoder
-        voices = config.voices
-        lexicon = config.lexicon
-        dataDir = config.dataDir
-        lang = config.lang
-        isSupertonic = config.isSupertonic
-        durationPredictor = config.durationPredictor
-        textEncoder = config.textEncoder
-        vectorEstimator = config.vectorEstimator
-        supertonicVocoder = config.supertonicVocoder
-        ttsJson = config.ttsJson
-        unicodeIndexer = config.unicodeIndexer
-        voiceStyle = config.voiceStyle
-        ruleFsts = config.ruleFsts
-
-        var currentDataDir = dataDir
-        if (currentDataDir != null && currentDataDir.isNotEmpty()) {
+        var currentDataDir = config.dataDir
+        if (currentDataDir.isNotEmpty()) {
             val newDir = copyDataDir(context, currentDataDir)
             currentDataDir = "$newDir/$currentDataDir"
         }
@@ -174,36 +166,29 @@ object TtsEngine {
         }
 
         val ttsConfig = getOfflineTtsConfig(
-            modelDir = modelDir!!,
-            modelName = modelName ?: "",
-            acousticModelName = acousticModelName ?: "",
-            vocoder = vocoder ?: "",
-            voices = voices ?: "",
-            lexicon = lexicon ?: "",
-            dataDir = currentDataDir ?: "",
+            modelDir = config.modelDir,
+            modelName = config.modelName,
+            acousticModelName = config.acousticModelName,
+            vocoder = config.vocoder,
+            voices = config.voices,
+            lexicon = config.lexicon,
+            dataDir = currentDataDir,
             dictDir = currentDictDir,
-            ruleFsts = ruleFsts ?: "",
-            ruleFars = ruleFars ?: "",
-            isKitten = isKitten,
-            isSupertonic = isSupertonic,
-            durationPredictor = durationPredictor ?: "",
-            textEncoder = textEncoder ?: "",
-            vectorEstimator = vectorEstimator ?: "",
-            supertonicVocoder = supertonicVocoder ?: "",
-            ttsJson = ttsJson ?: "",
-            unicodeIndexer = unicodeIndexer ?: "",
-            voiceStyle = voiceStyle ?: "",
+            ruleFsts = config.ruleFsts,
+            ruleFars = "",
+            isKitten = false,
+            isSupertonic = config.isSupertonic,
+            durationPredictor = config.durationPredictor,
+            textEncoder = config.textEncoder,
+            vectorEstimator = config.vectorEstimator,
+            supertonicVocoder = config.supertonicVocoder,
+            ttsJson = config.ttsJson,
+            unicodeIndexer = config.unicodeIndexer,
+            voiceStyle = config.voiceStyle,
         )
 
-
-        speed = preferenceHelper.getSpeed()
-        speakerId = preferenceHelper.getSid()
-
-        if (isSupertonic) {
-            supertonicLang = preferenceHelper.getLanguage(config.supertonicLang)
-        }
-
-        tts = OfflineTts(assetManager = assets, config = ttsConfig)
+        val engine = OfflineTts(assetManager = context.assets, config = ttsConfig)
+        return Pair(engine, config)
     }
 
     /**
