@@ -7,9 +7,13 @@ class TextSegmenterTest {
 
     @Test
     fun testPunctuationSplit() {
-        val input = "Hello there. How are you, my friend? I am fine! Wait，what about Chinese commas、right? 中文句号测试。阿拉伯语测试؟"
+        val input = "Hello there. How are you, my friend? I am fine! Wait，what about Chinese commas、right? 中文句号测试。阿拉伯语测试؟ 印地语测试। 缅甸语测试။"
         val output = TextSegmenter.splitText(input)
-        assertEquals(listOf("Hello there.", "How are you,", "my friend?", "I am fine!", "Wait，", "what about Chinese commas、", "right?", "中文句号测试。", "阿拉伯语测试؟"), output)
+        assertEquals(listOf(
+            "Hello there.", "How are you,", "my friend?", "I am fine!",
+            "Wait，", "what about Chinese commas、", "right?", "中文句号测试。",
+            "阿拉伯语测试؟", "印地语测试।", "缅甸语测试။"
+        ), output)
     }
 
     @Test

@@ -35,9 +35,14 @@ object TextSegmenter {
     // Global punctuation marks to split by
     private val splitChars = setOf(
         '.', '?', '!', ';', ',', '\n', // Latin/English
-        '。', '？', '！', '；', '，', '、', // CJK
-        '؟', '؛', '،', // Arabic
-        '\u0964', '\u0965' // Devanagari (Hindi) Danda and Double Danda
+        '。', '？', '！', '；', '，', '、', // CJK (Chinese, Japanese, Korean)
+        '؟', '؛', '،', // Arabic / Persian / Urdu
+        '\u0964', '\u0965', // Devanagari (Hindi, Sanskrit, Nepali, etc.) Danda & Double Danda
+        '\u104b', '\u104a', // Burmese Full Stop & Comma
+        '\u0f0d', // Tibetan Shad
+        '\u1362', // Ethiopic Full Stop
+        '\u0589', // Armenian Full Stop
+        '\u1803'  // Mongolian Full Stop
     )
 
     private fun splitByPunctuation(input: String): List<String> {
