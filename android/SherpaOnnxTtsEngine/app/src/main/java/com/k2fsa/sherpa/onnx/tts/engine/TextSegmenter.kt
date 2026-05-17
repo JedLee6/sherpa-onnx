@@ -32,6 +32,14 @@ object TextSegmenter {
         return step3.map { it.trim() }.filter { it.isNotEmpty() }
     }
 
+    // Global punctuation marks to split by
+    private val splitChars = setOf(
+        '.', '?', '!', ';', ',', '\n', // Latin/English
+        '。', '？', '！', '；', '，', '、', // CJK
+        '؟', '؛', '،', // Arabic
+        '\u0964', '\u0965' // Devanagari (Hindi) Danda and Double Danda
+    )
+
     private fun splitByPunctuation(input: String): List<String> {
         val tokens = mutableListOf<String>()
         val sb = StringBuilder()
@@ -41,7 +49,7 @@ object TextSegmenter {
             val c = input[i]
             sb.append(c)
             
-            if (c == '.' || c == '?' || c == '!' || c == ';' || c == '\n' || c == ',' || c == '，' || c == '、') {
+            if (c in splitChars) {
                 // Check if it's an abbreviation
                 if (c == '.') {
                     val currentStr = sb.toString().trim()
