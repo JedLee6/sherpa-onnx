@@ -68,7 +68,16 @@ const val TAG = "sherpa-onnx-tts-engine"
 
 class MainActivity : ComponentActivity() {
     private val languageDetector by lazy {
-        LanguageDetectorBuilder.fromAllLanguages().build()
+        LanguageDetectorBuilder.fromLanguages(
+            Language.ENGLISH, Language.KOREAN, Language.JAPANESE, Language.ARABIC,
+            Language.BULGARIAN, Language.CZECH, Language.DANISH, Language.GERMAN,
+            Language.GREEK, Language.SPANISH, Language.ESTONIAN, Language.FINNISH,
+            Language.FRENCH, Language.HINDI, Language.CROATIAN, Language.HUNGARIAN,
+            Language.INDONESIAN, Language.ITALIAN, Language.LITHUANIAN, Language.LATVIAN,
+            Language.DUTCH, Language.POLISH, Language.PORTUGUESE, Language.ROMANIAN,
+            Language.RUSSIAN, Language.SLOVAK, Language.SLOVENE, Language.SWEDISH,
+            Language.TURKISH, Language.UKRAINIAN, Language.VIETNAMESE, Language.CHINESE
+        ).withLowAccuracyMode().build()
     }
     // TODO(fangjun): Save settings in ttsViewModel
     private val ttsViewModel: TtsViewModel by viewModels()
