@@ -335,9 +335,10 @@ fun getOfflineTtsConfig(
             lexicon = "$modelDir/$lexicon",
             tokens = "$modelDir/tokens.txt",
             dataDir = dataDir,
+            dictDir = dictDir,
         )
     } else {
-        OfflineTtsVitsModelConfig()
+        OfflineTtsVitsModelConfig(dictDir = dictDir)
     }
 
     val matcha = if (acousticModelName.isNotEmpty()) {
@@ -347,9 +348,10 @@ fun getOfflineTtsConfig(
             lexicon = "$modelDir/$lexicon",
             tokens = "$modelDir/tokens.txt",
             dataDir = dataDir,
+            dictDir = dictDir,
         )
     } else {
-        OfflineTtsMatchaModelConfig()
+        OfflineTtsMatchaModelConfig(dictDir = dictDir)
     }
 
     val kokoro = if (voices.isNotEmpty() && !isKitten && !isSupertonic) {
@@ -358,6 +360,7 @@ fun getOfflineTtsConfig(
             voices = "$modelDir/$voices",
             tokens = "$modelDir/tokens.txt",
             dataDir = dataDir,
+            dictDir = dictDir,
             lexicon = when {
                 lexicon == "" -> lexicon
                 "," in lexicon -> lexicon
@@ -365,7 +368,7 @@ fun getOfflineTtsConfig(
             },
         )
     } else {
-        OfflineTtsKokoroModelConfig()
+        OfflineTtsKokoroModelConfig(dictDir = dictDir)
     }
 
     val kitten = if (isKitten) {

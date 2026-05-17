@@ -239,6 +239,9 @@ class MainActivity : ComponentActivity() {
                                 var rtfText by remember {
                                     mutableStateOf("")
                                 }
+                                var detectedLanguagesText by remember {
+                                    mutableStateOf("")
+                                }
                                 val scrollState = rememberScrollState(0)
 
                                 val saveLauncher = rememberLauncherForActivityResult(
@@ -324,6 +327,7 @@ class MainActivity : ComponentActivity() {
                                                 track.flush()
                                                 track.play()
                                                 rtfText = ""
+                                                detectedLanguagesText = ""
                                                 Log.i(TAG, "Started with text $testText")
 
                                                 scope.launch {
@@ -380,11 +384,14 @@ class MainActivity : ComponentActivity() {
                                                             sentences.add(testText)
                                                         }
 
+                                                        val sentencesInfo = mutableListOf<String>()
+
                                                         for (sentence in sentences) {
                                                             if (stopped) break
                                                             val detected = languageDetector.detectLanguageOf(sentence)
                                                             val iso1 = Languages.mapLinguaToIso1(detected) ?: TtsEngine.supertonicLang
                                                             Log.i(TAG, "Sentence: '$sentence', detected language: $detected, iso1: $iso1")
+                                                            sentencesInfo.add("[$iso1] $sentence")
 
                                                             val genConfig = GenerationConfig(sid = TtsEngine.speakerId, speed = TtsEngine.speed)
                                                             genConfig.extra = mapOf("lang" to iso1)
@@ -395,6 +402,10 @@ class MainActivity : ComponentActivity() {
                                                                 callback = ::callback,
                                                             )
                                                             allSamples.add(audio.samples)
+                                                        }
+                                                        val newLanguagesText = sentencesInfo.joinToString("\n")
+                                                        withContext(Dispatchers.Main) {
+                                                            detectedLanguagesText = newLanguagesText
                                                         }
                                                     } else {
                                                         val genConfig = GenerationConfig(sid = TtsEngine.speakerId, speed = TtsEngine.speed)
@@ -517,6 +528,11 @@ class MainActivity : ComponentActivity() {
                                 if (rtfText.isNotEmpty()) {
                                     Row {
                                         Text(rtfText)
+                                    }
+                                }
+                                if (detectedLanguagesText.isNotEmpty()) {
+                                    Row(modifier = Modifier.padding(top = 10.dp)) {
+                                        Text("子句子及对应语言:\n$detectedLanguagesText")
                                     }
                                 }
                             }
