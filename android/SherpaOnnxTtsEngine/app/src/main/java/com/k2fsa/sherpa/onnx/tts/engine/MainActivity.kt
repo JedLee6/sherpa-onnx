@@ -59,10 +59,17 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import kotlin.time.TimeSource
+import java.text.BreakIterator
+import java.util.Locale
+import com.github.pemistahl.lingua.api.LanguageDetectorBuilder
+import com.github.pemistahl.lingua.api.Language
 
 const val TAG = "sherpa-onnx-tts-engine"
 
 class MainActivity : ComponentActivity() {
+    private val languageDetector by lazy {
+        LanguageDetectorBuilder.fromAllLanguages().build()
+    }
     // TODO(fangjun): Save settings in ttsViewModel
     private val ttsViewModel: TtsViewModel by viewModels()
 
@@ -352,23 +359,68 @@ class MainActivity : ComponentActivity() {
                                                 CoroutineScope(Dispatchers.Default).launch {
                                                     val timeSource = TimeSource.Monotonic
                                                     val startTime = timeSource.markNow()
+                                                    val sampleRate = TtsEngine.tts!!.sampleRate()
+                                                    val allSamples = mutableListOf<FloatArray>()
 
-                                                    val genConfig = GenerationConfig(sid = TtsEngine.speakerId, speed = TtsEngine.speed)
                                                     if (TtsEngine.isSupertonic) {
-                                                        genConfig.extra = mapOf("lang" to TtsEngine.supertonicLang)
+                                                        val iterator = BreakIterator.getSentenceInstance(Locale.getDefault())
+                                                        iterator.setText(testText)
+                                                        val sentences = mutableListOf<String>()
+                                                        var start = iterator.first()
+                                                        var end = iterator.next()
+                                                        while (end != BreakIterator.DONE) {
+                                                            val sentence = testText.substring(start, end).trim()
+                                                            if (sentence.isNotEmpty()) {
+                                                                sentences.add(sentence)
+                                                            }
+                                                            start = end
+                                                            end = iterator.next()
+                                                        }
+                                                        if (sentences.isEmpty() && testText.isNotBlank()) {
+                                                            sentences.add(testText)
+                                                        }
+
+                                                        for (sentence in sentences) {
+                                                            if (stopped) break
+                                                            val detected = languageDetector.detectLanguageOf(sentence)
+                                                            val iso1 = Languages.mapLinguaToIso1(detected) ?: TtsEngine.supertonicLang
+                                                            Log.i(TAG, "Sentence: '$sentence', detected language: $detected, iso1: $iso1")
+
+                                                            val genConfig = GenerationConfig(sid = TtsEngine.speakerId, speed = TtsEngine.speed)
+                                                            genConfig.extra = mapOf("lang" to iso1)
+
+                                                            val audio = TtsEngine.tts!!.generateWithConfigAndCallback(
+                                                                text = sentence,
+                                                                config = genConfig,
+                                                                callback = ::callback,
+                                                            )
+                                                            allSamples.add(audio.samples)
+                                                        }
+                                                    } else {
+                                                        val genConfig = GenerationConfig(sid = TtsEngine.speakerId, speed = TtsEngine.speed)
+                                                        val audio =
+                                                            TtsEngine.tts!!.generateWithConfigAndCallback(
+                                                                text = testText,
+                                                                config = genConfig,
+                                                                callback = ::callback,
+                                                            )
+                                                        allSamples.add(audio.samples)
                                                     }
-                                                    val audio =
-                                                        TtsEngine.tts!!.generateWithConfigAndCallback(
-                                                            text = testText,
-                                                            config = genConfig,
-                                                            callback = ::callback,
-                                                        )
 
                                                     val elapsed =
-                                                        startTime.elapsedNow().inWholeMilliseconds.toFloat() / 1000;
+                                                        startTime.elapsedNow().inWholeMilliseconds.toFloat() / 1000
+
+                                                    var totalSamplesCount = 0
+                                                    for (s in allSamples) totalSamplesCount += s.size
+                                                    val combinedSamples = FloatArray(totalSamplesCount)
+                                                    var offset = 0
+                                                    for (s in allSamples) {
+                                                        s.copyInto(combinedSamples, offset)
+                                                        offset += s.size
+                                                    }
+
                                                     val audioDuration =
-                                                        audio.samples.size / TtsEngine.tts!!.sampleRate()
-                                                            .toFloat()
+                                                        combinedSamples.size / sampleRate.toFloat()
                                                     val RTF = String.format(
                                                         "Number of threads: %d\nElapsed: %.3f s\nAudio duration: %.3f s\nRTF: %.3f/%.3f = %.3f",
                                                         TtsEngine.tts!!.config.model.numThreads,
@@ -376,7 +428,7 @@ class MainActivity : ComponentActivity() {
                                                         audioDuration,
                                                         elapsed,
                                                         audioDuration,
-                                                        elapsed / audioDuration
+                                                        if (audioDuration > 0) elapsed / audioDuration else 0f
                                                     )
 
                                                     scope.launch {
@@ -388,22 +440,17 @@ class MainActivity : ComponentActivity() {
                                                     val filename =
                                                         application.filesDir.absolutePath + "/generated.wav"
 
+                                                    val combinedAudio = com.k2fsa.sherpa.onnx.GeneratedAudio(combinedSamples, sampleRate)
+                                                    val ok = combinedSamples.isNotEmpty() && combinedAudio.save(filename)
 
-                                                    val ok =
-                                                        audio.samples.isNotEmpty() && audio.save(
-                                                            filename
-                                                        )
-
-                                                    if (ok) {
-                                                        withContext(Dispatchers.Main) {
-                                                            startEnabled = true
+                                                    withContext(Dispatchers.Main) {
+                                                        startEnabled = true
+                                                        if (ok) {
                                                             playEnabled = true
                                                             saveEnabled = true
                                                             shareEnabled = true
-                                                            rtfText = RTF
                                                         }
-
-
+                                                        rtfText = RTF
                                                     }
                                                 }
                                             }
