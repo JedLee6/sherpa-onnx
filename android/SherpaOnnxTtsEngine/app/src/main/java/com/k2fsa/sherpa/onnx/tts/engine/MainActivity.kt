@@ -61,23 +61,14 @@ import java.io.File
 import kotlin.time.TimeSource
 import java.text.BreakIterator
 import java.util.Locale
-import com.github.pemistahl.lingua.api.LanguageDetectorBuilder
-import com.github.pemistahl.lingua.api.Language
+import com.google.mlkit.nl.languageid.LanguageIdentification
+import com.google.android.gms.tasks.Tasks
 
 const val TAG = "sherpa-onnx-tts-engine"
 
 class MainActivity : ComponentActivity() {
-    private val languageDetector by lazy {
-        LanguageDetectorBuilder.fromLanguages(
-            Language.ENGLISH, Language.KOREAN, Language.JAPANESE, Language.ARABIC,
-            Language.BULGARIAN, Language.CZECH, Language.DANISH, Language.GERMAN,
-            Language.GREEK, Language.SPANISH, Language.ESTONIAN, Language.FINNISH,
-            Language.FRENCH, Language.HINDI, Language.CROATIAN, Language.HUNGARIAN,
-            Language.INDONESIAN, Language.ITALIAN, Language.LITHUANIAN, Language.LATVIAN,
-            Language.DUTCH, Language.POLISH, Language.PORTUGUESE, Language.ROMANIAN,
-            Language.RUSSIAN, Language.SLOVAK, Language.SLOVENE, Language.SWEDISH,
-            Language.TURKISH, Language.UKRAINIAN, Language.VIETNAMESE, Language.CHINESE
-        ).withLowAccuracyMode().build()
+    private val languageIdentifier by lazy {
+        LanguageIdentification.getClient()
     }
     // TODO(fangjun): Save settings in ttsViewModel
     private val ttsViewModel: TtsViewModel by viewModels()
@@ -384,9 +375,14 @@ class MainActivity : ComponentActivity() {
 
                                                         for (sentence in sentences) {
                                                             if (stopped) break
-                                                            val detected = languageDetector.detectLanguageOf(sentence)
-                                                            val iso1 = Languages.mapLinguaToIso1(detected) ?: TtsEngine.supertonicLang
-                                                            Log.i(TAG, "Sentence: '$sentence', detected language: $detected, iso1: $iso1")
+                                                             val detected = try {
+                                                                 Tasks.await(languageIdentifier.identifyLanguage(sentence))
+                                                             } catch (e: Exception) {
+                                                                 Log.e(TAG, "Language identification failed", e)
+                                                                 "und"
+                                                             }
+                                                             val iso1 = Languages.mapGoogleMlKitToIso1(detected) ?: TtsEngine.supertonicLang
+                                                             Log.i(TAG, "Sentence: '$sentence', detected code: $detected, mapped iso1: $iso1")
                                                             sentencesInfo.add("[$iso1] $sentence")
 
                                                             val genConfig = GenerationConfig(sid = TtsEngine.speakerId, speed = TtsEngine.speed)

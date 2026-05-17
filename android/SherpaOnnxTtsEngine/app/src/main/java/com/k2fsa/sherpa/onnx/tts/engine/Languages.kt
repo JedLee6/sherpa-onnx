@@ -78,41 +78,12 @@ object Languages {
         }
     }
 
-    fun mapLinguaToIso1(language: com.github.pemistahl.lingua.api.Language): String? {
-        return when (language) {
-            com.github.pemistahl.lingua.api.Language.ENGLISH -> "en"
-            com.github.pemistahl.lingua.api.Language.KOREAN -> "ko"
-            com.github.pemistahl.lingua.api.Language.JAPANESE -> "ja"
-            com.github.pemistahl.lingua.api.Language.ARABIC -> "ar"
-            com.github.pemistahl.lingua.api.Language.BULGARIAN -> "bg"
-            com.github.pemistahl.lingua.api.Language.CZECH -> "cs"
-            com.github.pemistahl.lingua.api.Language.DANISH -> "da"
-            com.github.pemistahl.lingua.api.Language.GERMAN -> "de"
-            com.github.pemistahl.lingua.api.Language.GREEK -> "el"
-            com.github.pemistahl.lingua.api.Language.SPANISH -> "es"
-            com.github.pemistahl.lingua.api.Language.ESTONIAN -> "et"
-            com.github.pemistahl.lingua.api.Language.FINNISH -> "fi"
-            com.github.pemistahl.lingua.api.Language.FRENCH -> "fr"
-            com.github.pemistahl.lingua.api.Language.HINDI -> "hi"
-            com.github.pemistahl.lingua.api.Language.CROATIAN -> "hr"
-            com.github.pemistahl.lingua.api.Language.HUNGARIAN -> "hu"
-            com.github.pemistahl.lingua.api.Language.INDONESIAN -> "id"
-            com.github.pemistahl.lingua.api.Language.ITALIAN -> "it"
-            com.github.pemistahl.lingua.api.Language.LITHUANIAN -> "lt"
-            com.github.pemistahl.lingua.api.Language.LATVIAN -> "lv"
-            com.github.pemistahl.lingua.api.Language.DUTCH -> "nl"
-            com.github.pemistahl.lingua.api.Language.POLISH -> "pl"
-            com.github.pemistahl.lingua.api.Language.PORTUGUESE -> "pt"
-            com.github.pemistahl.lingua.api.Language.ROMANIAN -> "ro"
-            com.github.pemistahl.lingua.api.Language.RUSSIAN -> "ru"
-            com.github.pemistahl.lingua.api.Language.SLOVAK -> "sk"
-            com.github.pemistahl.lingua.api.Language.SLOVENE -> "sl"
-            com.github.pemistahl.lingua.api.Language.SWEDISH -> "sv"
-            com.github.pemistahl.lingua.api.Language.TURKISH -> "tr"
-            com.github.pemistahl.lingua.api.Language.UKRAINIAN -> "uk"
-            com.github.pemistahl.lingua.api.Language.VIETNAMESE -> "vi"
-            com.github.pemistahl.lingua.api.Language.CHINESE -> "zh"
-            else -> null
+    fun mapGoogleMlKitToIso1(code: String?): String? {
+        if (code == null || code == "und") return null
+        val lowerCode = code.lowercase()
+        return when {
+            lowerCode.startsWith("zh") -> "zh"
+            else -> lowerCode
         }
     }
 }
