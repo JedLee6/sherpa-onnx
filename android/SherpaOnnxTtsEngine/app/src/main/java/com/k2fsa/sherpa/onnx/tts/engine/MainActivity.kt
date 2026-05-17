@@ -118,7 +118,12 @@ class MainActivity : ComponentActivity() {
                     }) {
                         Box(modifier = Modifier.padding(it)) {
                             val context = LocalContext.current
-                            Column(modifier = Modifier.padding(16.dp)) {
+                            val mainScrollState = rememberScrollState()
+                            Column(
+                                modifier = Modifier
+                                    .padding(16.dp)
+                                    .verticalScroll(mainScrollState)
+                            ) {
                                 var expandedModel by remember { mutableStateOf(false) }
                                 ExposedDropdownMenuBox(
                                     expanded = expandedModel,
