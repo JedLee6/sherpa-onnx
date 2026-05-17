@@ -256,7 +256,6 @@ class MainActivity : ComponentActivity() {
                                 var detectedLanguagesText by remember {
                                     mutableStateOf("")
                                 }
-                                val scrollState = rememberScrollState(0)
 
                                 val saveLauncher = rememberLauncherForActivityResult(
                                     contract = ActivityResultContracts.CreateDocument("audio/wav")
@@ -313,7 +312,6 @@ class MainActivity : ComponentActivity() {
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .padding(bottom = 16.dp)
-                                        .verticalScroll(scrollState)
                                         .wrapContentHeight(),
                                     singleLine = false,
                                 )
