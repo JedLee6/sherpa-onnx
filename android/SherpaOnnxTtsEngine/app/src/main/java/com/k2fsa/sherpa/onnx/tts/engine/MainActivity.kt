@@ -66,6 +66,8 @@ import com.google.android.gms.tasks.Tasks
 
 const val TAG = "sherpa-onnx-tts-engine"
 
+class AudioChunk(val samples: FloatArray, val sampleRate: Int)
+
 class MainActivity : ComponentActivity() {
     private val languageIdentifier by lazy {
         LanguageIdentification.getClient()
@@ -81,8 +83,10 @@ class MainActivity : ComponentActivity() {
 
     private var stopped: Boolean = false
 
-    private var samplesChannel = Channel<FloatArray>(capacity = 128)
+    private var samplesChannel = Channel<AudioChunk>(capacity = 128)
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private var activeResampler: RealtimeResampler? = null
+    private var activeSampleRate: Int = 22050
 
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -95,6 +99,7 @@ class MainActivity : ComponentActivity() {
         Log.i(TAG, "Start to initialize AudioTrack")
         initAudioTrack()
         Log.i(TAG, "Finish initializing AudioTrack")
+        activeSampleRate = TtsEngine.tts!!.sampleRate()
 
         val preferenceHelper = PreferenceHelper(this)
         setContent {
@@ -176,6 +181,21 @@ class MainActivity : ComponentActivity() {
                                     )
                                 }
 
+                                if (TtsEngine.currentModel.id == "matcha-icefall-zh-baker") {
+                                    Column {
+                                        Text("Matcha Pitch " + String.format("%.2f", TtsEngine.matchaPitch))
+                                        Slider(
+                                            value = TtsEngine.matchaPitchState.value,
+                                            onValueChange = {
+                                                TtsEngine.matchaPitch = it
+                                                preferenceHelper.setMatchaPitch(it)
+                                            },
+                                            valueRange = 0.5f..1.5f,
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+                                    }
+                                }
+
                                 if (TtsEngine.isSupertonic) {
                                     var expanded by remember { mutableStateOf(false) }
                                     ExposedDropdownMenuBox(
@@ -218,11 +238,6 @@ class MainActivity : ComponentActivity() {
                                     }
                                 }
 
-                                val testTextContent = getSampleText(
-                                    if (TtsEngine.isSupertonic) Languages.getIso3Code(
-                                        TtsEngine.supertonicLang
-                                    ) else (TtsEngine.lang ?: "")
-                                )
 
                                 var testText by remember { mutableStateOf("") }
 
@@ -334,9 +349,14 @@ class MainActivity : ComponentActivity() {
                                                 Log.i(TAG, "Started with text $testText")
 
                                                 scope.launch {
-                                                    for (samples in samplesChannel) {
+                                                    for (chunk in samplesChannel) {
+                                                        val samples = chunk.samples
                                                         if (samples.isEmpty()) {
                                                             break
+                                                        }
+
+                                                        if (track.playbackRate != chunk.sampleRate) {
+                                                            track.playbackRate = chunk.sampleRate
                                                         }
 
                                                         Log.i(
@@ -392,7 +412,14 @@ class MainActivity : ComponentActivity() {
                                                                  TtsEngine.supertonicTts ?: TtsEngine.tts!!
                                                              }
 
-                                                             val genConfig = GenerationConfig(sid = TtsEngine.speakerId, speed = TtsEngine.speed)
+                                                              activeSampleRate = selectedTts.sampleRate()
+                                                              activeResampler = if (selectedTts == TtsEngine.matchaTts && TtsEngine.matchaPitch != 1.0f) {
+                                                                  RealtimeResampler(TtsEngine.matchaPitch)
+                                                               } else {
+                                                                  null
+                                                               }
+                                                             val targetSpeed = if (selectedTts == TtsEngine.matchaTts) TtsEngine.speed / TtsEngine.matchaPitch else TtsEngine.speed
+                                                             val genConfig = GenerationConfig(sid = TtsEngine.speakerId, speed = targetSpeed)
                                                              if (selectedTts == TtsEngine.supertonicTts || selectedTts != TtsEngine.matchaTts) {
                                                                  genConfig.extra = mapOf("lang" to iso1)
                                                              }
@@ -402,21 +429,39 @@ class MainActivity : ComponentActivity() {
                                                                  config = genConfig,
                                                                  callback = ::callback,
                                                              )
-                                                             allSamples.add(audio.samples)
+                                                             val processedSamples = if (activeResampler != null) {
+                                                                 RealtimeResampler(TtsEngine.matchaPitch).process(audio.samples)
+                                                             } else {
+                                                                 audio.samples
+                                                             }
+                                                             allSamples.add(processedSamples)
                                                         }
                                                         val newLanguagesText = sentencesInfo.joinToString("\n")
                                                         withContext(Dispatchers.Main) {
                                                             detectedLanguagesText = newLanguagesText
                                                         }
                                                     } else {
-                                                        val genConfig = GenerationConfig(sid = TtsEngine.speakerId, speed = TtsEngine.speed)
+                                                        val selectedTts = TtsEngine.tts!!
+                                                        activeSampleRate = selectedTts.sampleRate()
+                                                        activeResampler = if (selectedTts == TtsEngine.matchaTts && TtsEngine.matchaPitch != 1.0f) {
+                                                            RealtimeResampler(TtsEngine.matchaPitch)
+                                                        } else {
+                                                            null
+                                                        }
+                                                        val targetSpeed = if (selectedTts == TtsEngine.matchaTts) TtsEngine.speed / TtsEngine.matchaPitch else TtsEngine.speed
+                                                        val genConfig = GenerationConfig(sid = TtsEngine.speakerId, speed = targetSpeed)
                                                         val audio =
-                                                            TtsEngine.tts!!.generateWithConfigAndCallback(
+                                                            selectedTts.generateWithConfigAndCallback(
                                                                 text = testText,
                                                                 config = genConfig,
                                                                 callback = ::callback,
                                                             )
-                                                        allSamples.add(audio.samples)
+                                                        val processedSamples = if (activeResampler != null) {
+                                                            RealtimeResampler(TtsEngine.matchaPitch).process(audio.samples)
+                                                        } else {
+                                                            audio.samples
+                                                        }
+                                                        allSamples.add(processedSamples)
                                                     }
 
                                                     val elapsed =
@@ -445,7 +490,7 @@ class MainActivity : ComponentActivity() {
 
                                                     scope.launch {
                                                         Log.i(TAG, "send 0 samples")
-                                                            samplesChannel.send(FloatArray(0))
+                                                             samplesChannel.send(AudioChunk(FloatArray(0), 22050))
                                                         Log.i(TAG, "send 0 samples done")
                                                     }
 
@@ -576,10 +621,12 @@ class MainActivity : ComponentActivity() {
     // this function is called from C++
     private fun callback(samples: FloatArray): Int {
         if (!stopped) {
-            val samplesCopy = samples.copyOf()
+            val processed = activeResampler?.process(samples) ?: samples
+            val samplesCopy = processed.copyOf()
+            val currentRate = activeSampleRate
             scope.launch {
                 Log.i(TAG, "callback called with ${samplesCopy.count()} samples")
-                val ok = samplesChannel.trySend(samplesCopy).isSuccess
+                val ok = samplesChannel.trySend(AudioChunk(samplesCopy, currentRate)).isSuccess
                 Log.i(TAG, "callback called with $ok")
             }
             return 1

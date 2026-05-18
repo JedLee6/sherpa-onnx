@@ -73,6 +73,14 @@ object TtsEngine {
     val isSupertonic: Boolean
         get() = currentModel.isSupertonic
 
+    val matchaPitchState: MutableState<Float> = mutableFloatStateOf(0.85f)
+
+    var matchaPitch: Float
+        get() = matchaPitchState.value
+        set(value) {
+            matchaPitchState.value = value
+        }
+
     init {
         // Models are now dynamically loaded via PreferenceHelper and Models object
     }
@@ -136,6 +144,7 @@ object TtsEngine {
         speed = preferenceHelper.getSpeed()
         speakerId = preferenceHelper.getSid()
         supertonicLang = preferenceHelper.getLanguage("en")
+        matchaPitch = preferenceHelper.getMatchaPitch()
 
         // Ensure lang is never null after init, so TtsService doesn't crash
         if (lang == null) {
@@ -260,5 +269,36 @@ object TtsEngine {
         } catch (ex: Exception) {
             Log.e(TAG, "Failed to copy $filename, $ex")
         }
+    }
+}
+
+class RealtimeResampler(val factor: Float) {
+    private var lastFraction = 0.0f
+
+    fun process(input: FloatArray): FloatArray {
+        if (factor == 1.0f || factor <= 0.0f || input.isEmpty()) return input
+        
+        val inputSize = input.size
+        val estimatedSize = (inputSize / factor).toInt() + 2
+        val tempOutput = FloatArray(estimatedSize)
+        var outIdx = 0
+        
+        var pos = lastFraction
+        while (pos < inputSize) {
+            val idx = pos.toInt()
+            val frac = pos - idx
+            val sample = if (idx + 1 < inputSize) {
+                input[idx] * (1.0f - frac) + input[idx + 1] * frac
+            } else {
+                input[idx]
+            }
+            if (outIdx < tempOutput.size) {
+                tempOutput[outIdx++] = sample
+            }
+            pos += factor
+        }
+        
+        lastFraction = pos - inputSize
+        return tempOutput.copyOfRange(0, outIdx)
     }
 }

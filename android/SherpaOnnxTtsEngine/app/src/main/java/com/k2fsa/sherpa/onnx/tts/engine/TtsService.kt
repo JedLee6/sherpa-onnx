@@ -167,9 +167,16 @@ class TtsService : TextToSpeechService() {
             return
         }
 
+        val resampler = if (selectedTts == TtsEngine.matchaTts && TtsEngine.matchaPitch != 1.0f) {
+            RealtimeResampler(TtsEngine.matchaPitch)
+        } else {
+            null
+        }
+
         val ttsCallback: (FloatArray) -> Int = fun(floatSamples): Int {
+            val processed = resampler?.process(floatSamples) ?: floatSamples
             // convert FloatArray to ByteArray
-            val samples = floatArrayToByteArray(floatSamples)
+            val samples = floatArrayToByteArray(processed)
             val maxBufferSize: Int = callback.maxBufferSize
             var offset = 0
             while (offset < samples.size) {
@@ -184,7 +191,8 @@ class TtsService : TextToSpeechService() {
         }
 
         Log.i(TAG, "text: $text")
-        val genConfig = GenerationConfig(sid = TtsEngine.speakerId, speed = engineSpeed)
+        val targetSpeed = if (selectedTts == TtsEngine.matchaTts) engineSpeed / TtsEngine.matchaPitch else engineSpeed
+        val genConfig = GenerationConfig(sid = TtsEngine.speakerId, speed = targetSpeed)
         if (selectedTts == TtsEngine.supertonicTts || selectedTts != TtsEngine.matchaTts) {
             genConfig.extra = mapOf("lang" to iso1)
         }

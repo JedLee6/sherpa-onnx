@@ -8,6 +8,7 @@ class PreferenceHelper(context: Context) {
     private val SID_KEY = "speaker_id"
     private val LANG_KEY = "language"
     private val MODEL_KEY = "model_id"
+    private val MATCHA_PITCH_KEY = "matcha_pitch"
 
     private val sharedPreferences: SharedPreferences =
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -50,5 +51,15 @@ class PreferenceHelper(context: Context) {
 
     fun getModel(defaultValue: String = "supertonic-3-tts"): String {
         return sharedPreferences.getString(MODEL_KEY, defaultValue) ?: defaultValue
+    }
+
+    fun setMatchaPitch(value: Float) {
+        val editor = sharedPreferences.edit()
+        editor.putFloat(MATCHA_PITCH_KEY, value)
+        editor.apply()
+    }
+
+    fun getMatchaPitch(defaultValue: Float = 0.85f): Float {
+        return sharedPreferences.getFloat(MATCHA_PITCH_KEY, defaultValue)
     }
 }
