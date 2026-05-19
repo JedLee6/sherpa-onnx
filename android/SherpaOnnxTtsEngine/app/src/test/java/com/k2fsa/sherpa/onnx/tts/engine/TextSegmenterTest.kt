@@ -50,25 +50,40 @@ class TextSegmenterTest {
 
     @Test
     fun testNumberMerging() {
-        // 1. Prioritize merging with preceding sentence: "我买了3个苹果" -> ["我买了3", "个苹果"]
+        // 1. Prioritize merging with both preceding and succeeding when they share the same language: "我买了3个苹果" -> ["我买了3个苹果"]
         val input1 = "我买了3个苹果"
         val output1 = TextSegmenter.splitText(input1)
-        assertEquals(listOf("我买了3", "个苹果"), output1)
+        assertEquals(listOf("我买了3个苹果"), output1)
 
         // 2. If no preceding sentence, merge with succeeding sentence: "3个苹果" -> ["3个苹果"]
         val input2 = "3个苹果"
         val output2 = TextSegmenter.splitText(input2)
         assertEquals(listOf("3个苹果"), output2)
 
-        // 3. Decimal number with preceding: "苹果 123.45 桔子" -> ["苹果 123.45", "桔子"]
+        // 3. Same language on both sides: "苹果 123.45 桔子" -> ["苹果 123.45 桔子"]
         val input3 = "苹果 123.45 桔子"
         val output3 = TextSegmenter.splitText(input3)
-        assertEquals(listOf("苹果 123.45", "桔子"), output3)
+        assertEquals(listOf("苹果 123.45 桔子"), output3)
 
         // 4. Percentage with succeeding: "100% 的人" -> ["100% 的人"]
         val input4 = "100% 的人"
         val output4 = TextSegmenter.splitText(input4)
         assertEquals(listOf("100% 的人"), output4)
+
+        // 5. Different languages on both sides (do not merge together): "苹果 123.45 apple" -> ["苹果", "123.45 apple"]
+        val input5 = "苹果 123.45 apple"
+        val output5 = TextSegmenter.splitText(input5)
+        assertEquals(listOf("苹果", "123.45 apple"), output5)
+
+        // 6. Same language "en" on both sides: "apple 123.45 orange" -> ["apple 123.45 orange"]
+        val input6 = "apple 123.45 orange"
+        val output6 = TextSegmenter.splitText(input6)
+        assertEquals(listOf("apple 123.45 orange"), output6)
+
+        // 7. Recursive merging of multiple numbers: "我买了3或4个苹果" -> ["我买了3或4个苹果"]
+        val input7 = "我买了3或4个苹果"
+        val output7 = TextSegmenter.splitText(input7)
+        assertEquals(listOf("我买了3或4个苹果"), output7)
     }
 
     @Test

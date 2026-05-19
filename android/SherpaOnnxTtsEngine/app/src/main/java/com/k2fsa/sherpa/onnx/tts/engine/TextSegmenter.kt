@@ -29,10 +29,13 @@ object TextSegmenter {
             step3.addAll(splitByScriptBoundary(sentence))
         }
 
-        // Pass 4: Merge standalone numbers with adjacent segments
-        val step4 = mergeNumbers(step3)
+        // Pass 4: Merge numbers if adjacent segments have the same language
+        val step4 = mergeNumbersAndLanguages(step3)
 
-        return step4.map { it.trim() }.filter { it.isNotEmpty() }
+        // Pass 5: Merge remaining standalone numbers with adjacent segments
+        val step5 = mergeNumbers(step4)
+
+        return step5.map { it.trim() }.filter { it.isNotEmpty() }
     }
 
     private fun isNumber(s: String): Boolean {
@@ -41,6 +44,32 @@ object TextSegmenter {
         val hasDigit = trimmed.any { it.isDigit() }
         val isAllNumberChars = trimmed.all { it.isDigit() || it.isWhitespace() || it in ".,+-%$￥" }
         return hasDigit && isAllNumberChars
+    }
+
+    private fun mergeNumbersAndLanguages(segments: List<String>): List<String> {
+        if (segments.size < 3) return segments
+        val result = ArrayList<String>(segments)
+        
+        var i = 1
+        while (i < result.size - 1) {
+            val current = result[i]
+            if (isNumber(current)) {
+                val prev = result[i - 1]
+                val next = result[i + 1]
+                val prevLang = Languages.detectCjkLanguage(prev) ?: "en"
+                val nextLang = Languages.detectCjkLanguage(next) ?: "en"
+                if (prevLang == nextLang) {
+                    val merged = prev + current + next
+                    result[i - 1] = merged
+                    result.removeAt(i + 1)
+                    result.removeAt(i)
+                    i = Math.max(1, i - 1)
+                    continue
+                }
+            }
+            i++
+        }
+        return result
     }
 
     private fun mergeNumbers(segments: List<String>): List<String> {
@@ -94,19 +123,29 @@ object TextSegmenter {
             sb.append(c)
             
             if (c in splitChars) {
-                // Check if it's an abbreviation
-                if (c == '.') {
-                    val currentStr = sb.toString().trim()
-                    val lastWord = currentStr.substringBeforeLast(".").split(Regex("\\s+")).lastOrNull()?.trimEnd('.')
-                    if (lastWord != null && abbreviations.any { it.equals(lastWord, ignoreCase = true) }) {
-                        i++
-                        continue
+                var shouldSplit = true
+                
+                // If it is a period or comma, check if it's flanked by digits (decimal point or thousands separator)
+                if (c == '.' || c == ',') {
+                    val isNumChar = i > 0 && i < input.length - 1 && input[i - 1].isDigit() && input[i + 1].isDigit()
+                    if (isNumChar) {
+                        shouldSplit = false
                     }
                 }
                 
-                // End of sentence
-                tokens.add(sb.toString())
-                sb.clear()
+                if (shouldSplit && c == '.') {
+                    val currentStr = sb.toString().trim()
+                    val lastWord = currentStr.substringBeforeLast(".").split(Regex("\\s+")).lastOrNull()?.trimEnd('.')
+                    if (lastWord != null && abbreviations.any { it.equals(lastWord, ignoreCase = true) }) {
+                        shouldSplit = false
+                    }
+                }
+                
+                if (shouldSplit) {
+                    // End of sentence
+                    tokens.add(sb.toString())
+                    sb.clear()
+                }
             }
             i++
         }
