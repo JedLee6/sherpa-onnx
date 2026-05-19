@@ -395,14 +395,20 @@ class MainActivity : ComponentActivity() {
 
                                                         for (sentence in sentences) {
                                                             if (stopped) break
-                                                             val detected = try {
-                                                                 Tasks.await(languageIdentifier.identifyLanguage(sentence))
-                                                             } catch (e: Exception) {
-                                                                 Log.e(TAG, "Language identification failed", e)
-                                                                 "und"
+                                                             val cjkLang = Languages.detectCjkLanguage(sentence)
+                                                             val iso1 = if (cjkLang != null) {
+                                                                 Log.i(TAG, "Sentence: '$sentence', CJK language detected directly: $cjkLang")
+                                                                 cjkLang
+                                                             } else {
+                                                                 val detected = try {
+                                                                     Tasks.await(languageIdentifier.identifyLanguage(sentence))
+                                                                 } catch (e: Exception) {
+                                                                     Log.e(TAG, "Language identification failed", e)
+                                                                     "und"
+                                                                 }
+                                                                 Languages.mapGoogleMlKitToIso1(detected) ?: TtsEngine.supertonicLang
                                                              }
-                                                             val iso1 = Languages.mapGoogleMlKitToIso1(detected) ?: TtsEngine.supertonicLang
-                                                             Log.i(TAG, "Sentence: '$sentence', detected code: $detected, mapped iso1: $iso1")
+                                                             Log.i(TAG, "Sentence: '$sentence', final mapped iso1: $iso1")
                                                             sentencesInfo.add("[$iso1] $sentence")
 
                                                              val isChinese = (iso1 == "zh")

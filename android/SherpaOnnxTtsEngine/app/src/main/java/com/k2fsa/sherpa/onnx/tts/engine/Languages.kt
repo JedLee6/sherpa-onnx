@@ -86,4 +86,35 @@ object Languages {
             else -> lowerCode
         }
     }
+
+    fun detectCjkLanguage(text: String): String? {
+        var hasKana = false
+        var hasHangul = false
+        var hasHan = false
+
+        for (i in 0 until text.length) {
+            val c = text[i]
+            val codePoint = c.code
+            when {
+                codePoint in 0x3040..0x309F || codePoint in 0x30A0..0x30FF || 
+                codePoint in 0x31F0..0x31FF || codePoint in 0xFF65..0xFF9F -> {
+                    hasKana = true
+                }
+                codePoint in 0xAC00..0xD7A3 || codePoint in 0x1100..0x11FF || 
+                codePoint in 0x3130..0x318F -> {
+                    hasHangul = true
+                }
+                codePoint in 0x4E00..0x9FFF || codePoint in 0x3400..0x4DBF -> {
+                    hasHan = true
+                }
+            }
+        }
+
+        return when {
+            hasKana -> "ja"
+            hasHangul -> "ko"
+            hasHan -> "zh"
+            else -> null
+        }
+    }
 }

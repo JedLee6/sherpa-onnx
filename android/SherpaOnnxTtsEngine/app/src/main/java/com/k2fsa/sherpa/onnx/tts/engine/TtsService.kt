@@ -140,13 +140,19 @@ class TtsService : TextToSpeechService() {
             callback.error()
             return
         }
-        val detected = try {
-            Tasks.await(languageIdentifier.identifyLanguage(text))
-        } catch (e: Exception) {
-            Log.e(TAG, "Language identification failed in TtsService", e)
-            "und"
+        val cjkLang = Languages.detectCjkLanguage(text)
+        val iso1 = if (cjkLang != null) {
+            Log.i(TAG, "Text: '$text', CJK language detected directly in TtsService: $cjkLang")
+            cjkLang
+        } else {
+            val detected = try {
+                Tasks.await(languageIdentifier.identifyLanguage(text))
+            } catch (e: Exception) {
+                Log.e(TAG, "Language identification failed in TtsService", e)
+                "und"
+            }
+            Languages.mapGoogleMlKitToIso1(detected) ?: TtsEngine.supertonicLang
         }
-        val iso1 = Languages.mapGoogleMlKitToIso1(detected) ?: TtsEngine.supertonicLang
         val isChinese = (iso1 == "zh")
 
         val selectedTts = if (isChinese && TtsEngine.matchaTts != null) {

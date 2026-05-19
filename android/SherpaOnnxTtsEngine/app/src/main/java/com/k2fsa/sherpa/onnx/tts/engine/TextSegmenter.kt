@@ -29,7 +29,46 @@ object TextSegmenter {
             step3.addAll(splitByScriptBoundary(sentence))
         }
 
-        return step3.map { it.trim() }.filter { it.isNotEmpty() }
+        // Pass 4: Merge standalone numbers with adjacent segments
+        val step4 = mergeNumbers(step3)
+
+        return step4.map { it.trim() }.filter { it.isNotEmpty() }
+    }
+
+    private fun isNumber(s: String): Boolean {
+        val trimmed = s.trim()
+        if (trimmed.isEmpty()) return false
+        val hasDigit = trimmed.any { it.isDigit() }
+        val isAllNumberChars = trimmed.all { it.isDigit() || it.isWhitespace() || it in ".,+-%$￥" }
+        return hasDigit && isAllNumberChars
+    }
+
+    private fun mergeNumbers(segments: List<String>): List<String> {
+        if (segments.isEmpty()) return segments
+        val result = mutableListOf<String>()
+        
+        for (seg in segments) {
+            if (isNumber(seg)) {
+                if (result.isNotEmpty()) {
+                    // Merge with the preceding segment
+                    val lastIdx = result.size - 1
+                    result[lastIdx] = result[lastIdx] + seg
+                } else {
+                    // No preceding segment, add it to result
+                    result.add(seg)
+                }
+            } else {
+                if (result.isNotEmpty() && isNumber(result.last())) {
+                    // If the preceding segment was a standalone number (because it was the first element),
+                    // merge it with the current segment
+                    val lastIdx = result.size - 1
+                    result[lastIdx] = result[lastIdx] + seg
+                } else {
+                    result.add(seg)
+                }
+            }
+        }
+        return result
     }
 
     // Global punctuation marks to split by

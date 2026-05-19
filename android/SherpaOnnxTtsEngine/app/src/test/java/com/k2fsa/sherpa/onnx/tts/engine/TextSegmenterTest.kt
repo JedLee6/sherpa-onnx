@@ -47,4 +47,35 @@ class TextSegmenterTest {
         // Trimming and filtering empty...
         assertEquals(listOf("She said", "\"こんにちは\"", ".", "Mr. Wang replied", "\"Hello\"", "."), output)
     }
+
+    @Test
+    fun testNumberMerging() {
+        // 1. Prioritize merging with preceding sentence: "我买了3个苹果" -> ["我买了3", "个苹果"]
+        val input1 = "我买了3个苹果"
+        val output1 = TextSegmenter.splitText(input1)
+        assertEquals(listOf("我买了3", "个苹果"), output1)
+
+        // 2. If no preceding sentence, merge with succeeding sentence: "3个苹果" -> ["3个苹果"]
+        val input2 = "3个苹果"
+        val output2 = TextSegmenter.splitText(input2)
+        assertEquals(listOf("3个苹果"), output2)
+
+        // 3. Decimal number with preceding: "苹果 123.45 桔子" -> ["苹果 123.45", "桔子"]
+        val input3 = "苹果 123.45 桔子"
+        val output3 = TextSegmenter.splitText(input3)
+        assertEquals(listOf("苹果 123.45", "桔子"), output3)
+
+        // 4. Percentage with succeeding: "100% 的人" -> ["100% 的人"]
+        val input4 = "100% 的人"
+        val output4 = TextSegmenter.splitText(input4)
+        assertEquals(listOf("100% 的人"), output4)
+    }
+
+    @Test
+    fun testDirectCjkLanguageDetection() {
+        assertEquals("zh", Languages.detectCjkLanguage("你好，世界！"))
+        assertEquals("ja", Languages.detectCjkLanguage("こんにちは、世界！"))
+        assertEquals("ko", Languages.detectCjkLanguage("안녕하세요, 세계!"))
+        assertEquals(null, Languages.detectCjkLanguage("Hello World!"))
+    }
 }
