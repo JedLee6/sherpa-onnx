@@ -119,6 +119,15 @@ class TtsService : TextToSpeechService() {
         if (request == null || callback == null) {
             return
         }
+        if (TtsEngine.tts == null) {
+            Log.w(TAG, "TtsEngine.tts is null in onSynthesizeText, calling createTts")
+            TtsEngine.createTts(application)
+            if (TtsEngine.tts == null) {
+                Log.e(TAG, "TtsEngine.tts is still null, cannot synthesize")
+                callback.error()
+                return
+            }
+        }
         val language = request.language
         val country = request.country
         val variant = request.variant
@@ -161,20 +170,25 @@ class TtsService : TextToSpeechService() {
             TtsEngine.supertonicTts ?: TtsEngine.tts!!
         }
 
-        Log.i(TAG, "text: $text, engineSpeed: $engineSpeed, isChinese: $isChinese")
+        val nativeRate = TtsEngine.tts!!.sampleRate()
+        val generatorRate = selectedTts.sampleRate()
+        val factor = if (selectedTts == TtsEngine.matchaTts) {
+            TtsEngine.matchaPitch * (generatorRate.toFloat() / nativeRate)
+        } else {
+            generatorRate.toFloat() / nativeRate
+        }
 
-        // Note that AudioFormat.ENCODING_PCM_FLOAT requires API level >= 24
-        // callback.start(selectedTts.sampleRate(), AudioFormat.ENCODING_PCM_FLOAT, 1)
+        Log.i(TAG, "text: $text, engineSpeed: $engineSpeed, isChinese: $isChinese, nativeRate: $nativeRate, generatorRate: $generatorRate, factor: $factor")
 
-        callback.start(selectedTts.sampleRate(), AudioFormat.ENCODING_PCM_16BIT, 1)
+        callback.start(nativeRate, AudioFormat.ENCODING_PCM_16BIT, 1)
 
         if (text.isBlank() || text.isEmpty()) {
             callback.done()
             return
         }
 
-        val resampler = if (selectedTts == TtsEngine.matchaTts && TtsEngine.matchaPitch != 1.0f) {
-            RealtimeResampler(TtsEngine.matchaPitch)
+        val resampler = if (factor != 1.0f) {
+            RealtimeResampler(factor)
         } else {
             null
         }
@@ -196,8 +210,8 @@ class TtsService : TextToSpeechService() {
             return 1
         }
 
-        Log.i(TAG, "text: $text")
         val targetSpeed = if (selectedTts == TtsEngine.matchaTts) engineSpeed / TtsEngine.matchaPitch else engineSpeed
+        Log.i(TAG, "TtsService debug - text: '$text', selectedTts: $selectedTts, nativeRate: $nativeRate, generatorRate: $generatorRate, factor: $factor, resampler: $resampler, engineSpeed: $engineSpeed, targetSpeed: $targetSpeed")
         val genConfig = GenerationConfig(sid = TtsEngine.speakerId, speed = targetSpeed)
         if (selectedTts == TtsEngine.supertonicTts || selectedTts != TtsEngine.matchaTts) {
             genConfig.extra = mapOf("lang" to iso1)

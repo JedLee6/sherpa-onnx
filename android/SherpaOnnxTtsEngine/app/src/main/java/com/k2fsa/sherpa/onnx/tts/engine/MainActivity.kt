@@ -154,6 +154,7 @@ class MainActivity : ComponentActivity() {
                                                     if (TtsEngine.validateModelAssets(context, model)) {
                                                         preferenceHelper.setModel(model.id)
                                                         TtsEngine.updateTts(context)
+                                                        initAudioTrack()
                                                     } else {
                                                         Toast.makeText(
                                                             context,
@@ -411,63 +412,81 @@ class MainActivity : ComponentActivity() {
                                                              Log.i(TAG, "Sentence: '$sentence', final mapped iso1: $iso1")
                                                             sentencesInfo.add("[$iso1] $sentence")
 
-                                                             val isChinese = (iso1 == "zh")
-                                                             val selectedTts = if (isChinese && TtsEngine.matchaTts != null) {
-                                                                 TtsEngine.matchaTts!!
-                                                             } else {
-                                                                 TtsEngine.supertonicTts ?: TtsEngine.tts!!
-                                                             }
+                                                              val isChinese = (iso1 == "zh")
+                                                              val selectedTts = if (isChinese && TtsEngine.matchaTts != null) {
+                                                                  TtsEngine.matchaTts!!
+                                                              } else {
+                                                                  TtsEngine.supertonicTts ?: TtsEngine.tts!!
+                                                              }
 
-                                                              activeSampleRate = selectedTts.sampleRate()
-                                                              activeResampler = if (selectedTts == TtsEngine.matchaTts && TtsEngine.matchaPitch != 1.0f) {
-                                                                  RealtimeResampler(TtsEngine.matchaPitch)
-                                                               } else {
+                                                              val nativeRate = TtsEngine.tts!!.sampleRate()
+                                                              val generatorRate = selectedTts.sampleRate()
+                                                              val factor = if (selectedTts == TtsEngine.matchaTts) {
+                                                                  TtsEngine.matchaPitch * (generatorRate.toFloat() / nativeRate)
+                                                              } else {
+                                                                  generatorRate.toFloat() / nativeRate
+                                                              }
+
+                                                              activeSampleRate = nativeRate
+                                                              activeResampler = if (factor != 1.0f) {
+                                                                  RealtimeResampler(factor)
+                                                              } else {
                                                                   null
-                                                               }
-                                                             val targetSpeed = if (selectedTts == TtsEngine.matchaTts) TtsEngine.speed / TtsEngine.matchaPitch else TtsEngine.speed
-                                                             val genConfig = GenerationConfig(sid = TtsEngine.speakerId, speed = targetSpeed)
-                                                             if (selectedTts == TtsEngine.supertonicTts || selectedTts != TtsEngine.matchaTts) {
-                                                                 genConfig.extra = mapOf("lang" to iso1)
-                                                             }
+                                                              }
+                                                              val targetSpeed = if (selectedTts == TtsEngine.matchaTts) TtsEngine.speed / TtsEngine.matchaPitch else TtsEngine.speed
+                                                              Log.i(TAG, "Sentence loop debug - sentence: '$sentence', selectedTts: $selectedTts, matchaTts: ${TtsEngine.matchaTts}, isMatcha: ${selectedTts == TtsEngine.matchaTts}, nativeRate: $nativeRate, generatorRate: $generatorRate, factor: $factor, activeResampler: $activeResampler, speed: ${TtsEngine.speed}, targetSpeed: $targetSpeed")
+                                                              val genConfig = GenerationConfig(sid = TtsEngine.speakerId, speed = targetSpeed)
+                                                              if (selectedTts == TtsEngine.supertonicTts || selectedTts != TtsEngine.matchaTts) {
+                                                                  genConfig.extra = mapOf("lang" to iso1)
+                                                              }
 
-                                                             val audio = selectedTts.generateWithConfigAndCallback(
-                                                                 text = sentence,
-                                                                 config = genConfig,
-                                                                 callback = ::callback,
-                                                             )
-                                                             val processedSamples = if (activeResampler != null) {
-                                                                 RealtimeResampler(TtsEngine.matchaPitch).process(audio.samples)
-                                                             } else {
-                                                                 audio.samples
-                                                             }
-                                                             allSamples.add(processedSamples)
+                                                              val audio = selectedTts.generateWithConfigAndCallback(
+                                                                  text = sentence,
+                                                                  config = genConfig,
+                                                                  callback = ::callback,
+                                                              )
+                                                              val processedSamples = if (activeResampler != null) {
+                                                                  RealtimeResampler(factor).process(audio.samples)
+                                                              } else {
+                                                                  audio.samples
+                                                              }
+                                                              allSamples.add(processedSamples)
                                                         }
                                                         val newLanguagesText = sentencesInfo.joinToString("\n")
                                                         withContext(Dispatchers.Main) {
                                                             detectedLanguagesText = newLanguagesText
                                                         }
                                                     } else {
-                                                        val selectedTts = TtsEngine.tts!!
-                                                        activeSampleRate = selectedTts.sampleRate()
-                                                        activeResampler = if (selectedTts == TtsEngine.matchaTts && TtsEngine.matchaPitch != 1.0f) {
-                                                            RealtimeResampler(TtsEngine.matchaPitch)
-                                                        } else {
-                                                            null
-                                                        }
-                                                        val targetSpeed = if (selectedTts == TtsEngine.matchaTts) TtsEngine.speed / TtsEngine.matchaPitch else TtsEngine.speed
-                                                        val genConfig = GenerationConfig(sid = TtsEngine.speakerId, speed = targetSpeed)
-                                                        val audio =
-                                                            selectedTts.generateWithConfigAndCallback(
-                                                                text = testText,
-                                                                config = genConfig,
-                                                                callback = ::callback,
-                                                            )
-                                                        val processedSamples = if (activeResampler != null) {
-                                                            RealtimeResampler(TtsEngine.matchaPitch).process(audio.samples)
-                                                        } else {
-                                                            audio.samples
-                                                        }
-                                                        allSamples.add(processedSamples)
+                                                         val selectedTts = TtsEngine.tts!!
+                                                         val nativeRate = selectedTts.sampleRate()
+                                                         val generatorRate = selectedTts.sampleRate()
+                                                         val factor = if (selectedTts == TtsEngine.matchaTts) {
+                                                             TtsEngine.matchaPitch * (generatorRate.toFloat() / nativeRate)
+                                                         } else {
+                                                             generatorRate.toFloat() / nativeRate
+                                                         }
+
+                                                         activeSampleRate = nativeRate
+                                                         activeResampler = if (factor != 1.0f) {
+                                                             RealtimeResampler(factor)
+                                                         } else {
+                                                             null
+                                                         }
+                                                         val targetSpeed = if (selectedTts == TtsEngine.matchaTts) TtsEngine.speed / TtsEngine.matchaPitch else TtsEngine.speed
+                                                         Log.i(TAG, "Else branch debug - testText: '$testText', selectedTts: $selectedTts, nativeRate: $nativeRate, generatorRate: $generatorRate, factor: $factor, activeResampler: $activeResampler, speed: ${TtsEngine.speed}, targetSpeed: $targetSpeed")
+                                                         val genConfig = GenerationConfig(sid = TtsEngine.speakerId, speed = targetSpeed)
+                                                         val audio =
+                                                             selectedTts.generateWithConfigAndCallback(
+                                                                 text = testText,
+                                                                 config = genConfig,
+                                                                 callback = ::callback,
+                                                             )
+                                                         val processedSamples = if (activeResampler != null) {
+                                                             RealtimeResampler(factor).process(audio.samples)
+                                                         } else {
+                                                             audio.samples
+                                                         }
+                                                         allSamples.add(processedSamples)
                                                     }
 
                                                     val elapsed =
@@ -644,6 +663,14 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun initAudioTrack() {
+        if (::track.isInitialized) {
+            try {
+                track.stop()
+                track.release()
+            } catch (e: Exception) {
+                Log.e(TAG, "Error releasing old AudioTrack", e)
+            }
+        }
         val sampleRate = TtsEngine.tts!!.sampleRate()
         val bufLength = AudioTrack.getMinBufferSize(
             sampleRate,
