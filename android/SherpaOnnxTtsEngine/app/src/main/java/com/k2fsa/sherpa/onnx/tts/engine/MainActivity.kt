@@ -78,16 +78,16 @@ data class VoiceOption(
 )
 
 val voicesList = listOf(
-    VoiceOption(0, "M1", "Lively, upbeat male voice with confident energy and a standard, clear tone.", "Promotional videos, upbeat explainers, general-purpose narration, casual announcements."),
-    VoiceOption(1, "M2", "Deep, robust male voice; calm, composed, and serious with a grounded presence.", "Corporate content, serious announcements, documentaries, formal guidance."),
-    VoiceOption(2, "M3", "Polished, authoritative male voice; confident and trustworthy with strong presentation quality.", "Business presentations, leadership messages, investor briefings, high-trust narration."),
-    VoiceOption(3, "M4", "Soft, neutral-toned male voice; gentle and approachable with a youthful, friendly quality.", "Educational content, friendly explainers, onboarding guides, youth-oriented narration."),
-    VoiceOption(4, "M5", "Warm, soft-spoken male voice; calm and soothing with a natural storytelling quality.", "Audiobooks, relaxation content, bedtime stories, reflective or emotional narration."),
-    VoiceOption(5, "F1", "Calm female voice with a slightly low tone; steady and composed.", "Customer service, guided instructions, meditative content, professional narration."),
-    VoiceOption(6, "F2", "Bright, cheerful female voice; lively, playful, and youthful with spirited energy.", "Youth content, playful ads, social media videos, character voices."),
-    VoiceOption(7, "F3", "Clear, professional announcer-style female voice; articulate and broadcast-ready.", "Commercials, documentaries, news-style narration, formal presentations."),
-    VoiceOption(8, "F4", "Crisp, confident female voice; distinct and expressive with strong delivery.", "Business explainers, training videos, pitch decks, product announcements."),
-    VoiceOption(9, "F5", "Kind, gentle female voice; soft-spoken, calm, and naturally soothing.", "Audiobooks, supportive messages, wellness content, empathetic narration.")
+    VoiceOption(0, "F1", "Calm female voice with a slightly low tone; steady and composed.", "Customer service, guided instructions, meditative content, professional narration."),
+    VoiceOption(1, "F2", "Bright, cheerful female voice; lively, playful, and youthful with spirited energy.", "Youth content, playful ads, social media videos, character voices."),
+    VoiceOption(2, "F3", "Clear, professional announcer-style female voice; articulate and broadcast-ready.", "Commercials, documentaries, news-style narration, formal presentations."),
+    VoiceOption(3, "F4", "Crisp, confident female voice; distinct and expressive with strong delivery.", "Business explainers, training videos, pitch decks, product announcements."),
+    VoiceOption(4, "F5", "Kind, gentle female voice; soft-spoken, calm, and naturally soothing.", "Audiobooks, supportive messages, wellness content, empathetic narration."),
+    VoiceOption(5, "M1", "Lively, upbeat male voice with confident energy and a standard, clear tone.", "Promotional videos, upbeat explainers, general-purpose narration, casual announcements."),
+    VoiceOption(6, "M2", "Deep, robust male voice; calm, composed, and serious with a grounded presence.", "Corporate content, serious announcements, documentaries, formal guidance."),
+    VoiceOption(7, "M3", "Polished, authoritative male voice; confident and trustworthy with strong presentation quality.", "Business presentations, leadership messages, investor briefings, high-trust narration."),
+    VoiceOption(8, "M4", "Soft, neutral-toned male voice; gentle and approachable with a youthful, friendly quality.", "Educational content, friendly explainers, onboarding guides, youth-oriented narration."),
+    VoiceOption(9, "M5", "Warm, soft-spoken male voice; calm and soothing with a natural storytelling quality.", "Audiobooks, relaxation content, bedtime stories, reflective or emotional narration.")
 )
 
 class MainActivity : ComponentActivity() {
@@ -317,7 +317,7 @@ class MainActivity : ComponentActivity() {
                                                  .padding(bottom = 16.dp)
                                          ) {
                                              OutlinedTextField(
-                                                 value = "${selectedVoice.name} (${if (selectedVoice.id < 5) "Male" else "Female"}) - ${selectedVoice.description}",
+                                                 value = "${selectedVoice.name} (${if (selectedVoice.id < 5) "Female" else "Male"}) - ${selectedVoice.description}",
                                                  onValueChange = {},
                                                  readOnly = true,
                                                  label = { Text(stringResource(R.string.voice_speaker_label)) },
@@ -340,7 +340,7 @@ class MainActivity : ComponentActivity() {
                                                          text = {
                                                              Column(modifier = Modifier.padding(vertical = 4.dp)) {
                                                                  Text(
-                                                                     text = "${voice.name} (${if (voice.id < 5) "Male" else "Female"})",
+                                                                     text = "${voice.name} (${if (voice.id < 5) "Female" else "Male"})",
                                                                      style = MaterialTheme.typography.titleMedium,
                                                                      color = MaterialTheme.colorScheme.primary
                                                                  )
