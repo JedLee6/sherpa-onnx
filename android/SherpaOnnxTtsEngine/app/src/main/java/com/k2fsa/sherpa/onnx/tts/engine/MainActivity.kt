@@ -70,6 +70,26 @@ const val TAG = "sherpa-onnx-tts-engine"
 
 class AudioChunk(val samples: FloatArray, val sampleRate: Int)
 
+data class VoiceOption(
+    val id: Int,
+    val name: String,
+    val description: String,
+    val useCases: String
+)
+
+val voicesList = listOf(
+    VoiceOption(0, "M1", "Lively, upbeat male voice with confident energy and a standard, clear tone.", "Promotional videos, upbeat explainers, general-purpose narration, casual announcements."),
+    VoiceOption(1, "M2", "Deep, robust male voice; calm, composed, and serious with a grounded presence.", "Corporate content, serious announcements, documentaries, formal guidance."),
+    VoiceOption(2, "M3", "Polished, authoritative male voice; confident and trustworthy with strong presentation quality.", "Business presentations, leadership messages, investor briefings, high-trust narration."),
+    VoiceOption(3, "M4", "Soft, neutral-toned male voice; gentle and approachable with a youthful, friendly quality.", "Educational content, friendly explainers, onboarding guides, youth-oriented narration."),
+    VoiceOption(4, "M5", "Warm, soft-spoken male voice; calm and soothing with a natural storytelling quality.", "Audiobooks, relaxation content, bedtime stories, reflective or emotional narration."),
+    VoiceOption(5, "F1", "Calm female voice with a slightly low tone; steady and composed.", "Customer service, guided instructions, meditative content, professional narration."),
+    VoiceOption(6, "F2", "Bright, cheerful female voice; lively, playful, and youthful with spirited energy.", "Youth content, playful ads, social media videos, character voices."),
+    VoiceOption(7, "F3", "Clear, professional announcer-style female voice; articulate and broadcast-ready.", "Commercials, documentaries, news-style narration, formal presentations."),
+    VoiceOption(8, "F4", "Crisp, confident female voice; distinct and expressive with strong delivery.", "Business explainers, training videos, pitch decks, product announcements."),
+    VoiceOption(9, "F5", "Kind, gentle female voice; soft-spoken, calm, and naturally soothing.", "Audiobooks, supportive messages, wellness content, empathetic narration.")
+)
+
 class MainActivity : ComponentActivity() {
     private var languageDetector: LanguageDetector? = null
     // TODO(fangjun): Save settings in ttsViewModel
@@ -279,35 +299,98 @@ class MainActivity : ComponentActivity() {
                                     }
                                 }
 
-                                if (TtsEngine.isInitializedState.value && TtsEngine.tts != null) {
-                                    val numSpeakers = TtsEngine.tts!!.numSpeakers()
-                                    if (numSpeakers > 1) {
-                                        OutlinedTextField(
-                                            value = TtsEngine.speakerIdState.value.toString(),
-                                            onValueChange = {
-                                                if (it.isEmpty() || it.isBlank()) {
-                                                    TtsEngine.speakerId = 0
-                                                } else {
-                                                    try {
-                                                        TtsEngine.speakerId = it.toString().toInt()
-                                                    } catch (ex: NumberFormatException) {
-                                                        Log.i(TAG, "Invalid input: $it")
-                                                        TtsEngine.speakerId = 0
-                                                    }
-                                                }
-                                                preferenceHelper.setSid(TtsEngine.speakerId)
-                                            },
-                                            label = {
-                                                Text(stringResource(R.string.speaker_id_label, numSpeakers - 1))
-                                            },
-                                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(bottom = 16.dp)
-                                                .wrapContentHeight(),
-                                        )
-                                    }
-                                }
+                                 if (TtsEngine.isInitializedState.value && TtsEngine.tts != null) {
+                                     val numSpeakers = TtsEngine.tts!!.numSpeakers()
+                                     if (numSpeakers == 10) {
+                                         var expandedVoice by remember { mutableStateOf(false) }
+                                         val selectedVoice = voicesList.find { it.id == TtsEngine.speakerId } ?: voicesList[0]
+
+                                         ExposedDropdownMenuBox(
+                                             expanded = expandedVoice && !TtsEngine.isInitializingState.value,
+                                             onExpandedChange = {
+                                                 if (!TtsEngine.isInitializingState.value) {
+                                                     expandedVoice = !expandedVoice
+                                                 }
+                                             },
+                                             modifier = Modifier
+                                                 .fillMaxWidth()
+                                                 .padding(bottom = 16.dp)
+                                         ) {
+                                             OutlinedTextField(
+                                                 value = "${selectedVoice.name} (${if (selectedVoice.id < 5) "Male" else "Female"}) - ${selectedVoice.description}",
+                                                 onValueChange = {},
+                                                 readOnly = true,
+                                                 label = { Text(stringResource(R.string.voice_speaker_label)) },
+                                                 trailingIcon = {
+                                                     ExposedDropdownMenuDefaults.TrailingIcon(
+                                                         expanded = expandedVoice
+                                                     )
+                                                 },
+                                                 colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
+                                                 modifier = Modifier
+                                                     .menuAnchor()
+                                                     .fillMaxWidth()
+                                             )
+                                             ExposedDropdownMenu(
+                                                 expanded = expandedVoice,
+                                                 onDismissRequest = { expandedVoice = false }
+                                             ) {
+                                                 voicesList.forEach { voice ->
+                                                     DropdownMenuItem(
+                                                         text = {
+                                                             Column(modifier = Modifier.padding(vertical = 4.dp)) {
+                                                                 Text(
+                                                                     text = "${voice.name} (${if (voice.id < 5) "Male" else "Female"})",
+                                                                     style = MaterialTheme.typography.titleMedium,
+                                                                     color = MaterialTheme.colorScheme.primary
+                                                                 )
+                                                                 Text(
+                                                                     text = voice.description,
+                                                                     style = MaterialTheme.typography.bodyMedium
+                                                                 )
+                                                                 Text(
+                                                                     text = "Use Cases: ${voice.useCases}",
+                                                                     style = MaterialTheme.typography.bodySmall,
+                                                                     color = MaterialTheme.colorScheme.outline
+                                                                 )
+                                                             }
+                                                         },
+                                                         onClick = {
+                                                             TtsEngine.speakerId = voice.id
+                                                             preferenceHelper.setSid(voice.id)
+                                                             expandedVoice = false
+                                                         }
+                                                     )
+                                                 }
+                                             }
+                                         }
+                                     } else if (numSpeakers > 1) {
+                                         OutlinedTextField(
+                                             value = TtsEngine.speakerIdState.value.toString(),
+                                             onValueChange = {
+                                                 if (it.isEmpty() || it.isBlank()) {
+                                                     TtsEngine.speakerId = 0
+                                                 } else {
+                                                     try {
+                                                         TtsEngine.speakerId = it.toString().toInt()
+                                                     } catch (ex: NumberFormatException) {
+                                                         Log.i(TAG, "Invalid input: $it")
+                                                         TtsEngine.speakerId = 0
+                                                     }
+                                                 }
+                                                 preferenceHelper.setSid(TtsEngine.speakerId)
+                                             },
+                                             label = {
+                                                 Text(stringResource(R.string.speaker_id_label, numSpeakers - 1))
+                                             },
+                                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                             modifier = Modifier
+                                                 .fillMaxWidth()
+                                                 .padding(bottom = 16.dp)
+                                                 .wrapContentHeight(),
+                                         )
+                                     }
+                                 }
 
                                 OutlinedTextField(
                                     value = testText,

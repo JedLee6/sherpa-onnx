@@ -20,5 +20,6 @@
     <string name="toast_tts_initializing">TTS-Engine wird initialisiert, bitte warten...</string>
     <string name="toast_tts_initialized">TTS-Engine erfolgreich initialisiert!</string>
     <string name="toast_tts_failed">Initialisierung der TTS-Engine fehlgeschlagen.</string>
+    <string name="voice_speaker_label">Stimme / Sprecher</string>
     <string name="rtf_format">Anzahl der Threads: %1$d\nVergangen: %2$.3f s\nAudiodauer: %3$.3f s\nRTF: %4$.3f/%5$.3f = %6$.3f</string>
 </resources>

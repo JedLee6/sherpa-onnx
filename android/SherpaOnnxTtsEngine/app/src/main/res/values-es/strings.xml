@@ -20,5 +20,6 @@
     <string name="toast_tts_initializing">Inicializando el motor TTS, por favor espere...</string>
     <string name="toast_tts_initialized">¡Motor TTS inicializado con éxito!</string>
     <string name="toast_tts_failed">Error al inicializar el motor TTS.</string>
+    <string name="voice_speaker_label">Voz / Hablante</string>
     <string name="rtf_format">Número de hilos: %1$d\nTranscurrido: %2$.3f s\nDuración de audio: %3$.3f s\nRTF: %4$.3f/%5$.3f = %6$.3f</string>
 </resources>
