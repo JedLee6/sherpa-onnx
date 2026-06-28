@@ -174,19 +174,23 @@ class TtsService : TextToSpeechService() {
             return
         }
         val cjkLang = Languages.detectCjkLanguage(text)
-        val iso1 = if (cjkLang != null) {
-            Log.i(TAG, "Text: '$text', CJK language detected directly in TtsService: $cjkLang")
-            cjkLang
-        } else {
-            val detected = try {
-                val result = languageDetector?.detect(text)
-                val prediction = result?.languagesAndScores()?.firstOrNull()
-                prediction?.languageCode() ?: "und"
-            } catch (e: Exception) {
-                Log.e(TAG, "Language identification failed in TtsService", e)
-                "und"
+        val iso1 = if (TtsEngine.supertonicLang == "auto") {
+            if (cjkLang != null) {
+                Log.i(TAG, "Text: '$text', CJK language detected directly in TtsService: $cjkLang")
+                cjkLang
+            } else {
+                val detected = try {
+                    val result = languageDetector?.detect(text)
+                    val prediction = result?.languagesAndScores()?.firstOrNull()
+                    prediction?.languageCode() ?: "und"
+                } catch (e: Exception) {
+                    Log.e(TAG, "Language identification failed in TtsService", e)
+                    "und"
+                }
+                Languages.mapGoogleMlKitToIso1(detected) ?: "en"
             }
-            Languages.mapGoogleMlKitToIso1(detected) ?: TtsEngine.supertonicLang
+        } else {
+            TtsEngine.supertonicLang
         }
         val isChinese = (iso1 == "zh")
 

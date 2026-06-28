@@ -37,7 +37,7 @@ object TtsEngine {
     var lang2: String? = null
 
     // for Supertonic TTS: language code in ISO 639-1 format, e.g., "en", "zh", "ja"
-    val supertonicLangState: MutableState<String> = mutableStateOf("en")
+    val supertonicLangState: MutableState<String> = mutableStateOf("auto")
 
     var supertonicLang: String
         get() = supertonicLangState.value
@@ -105,7 +105,7 @@ object TtsEngine {
 
         speed = preferenceHelper.getSpeed()
         speakerId = preferenceHelper.getSid()
-        supertonicLang = preferenceHelper.getLanguage("en")
+        supertonicLang = preferenceHelper.getLanguage("auto")
 
         // Ensure lang is never null or empty after init, so TtsService doesn't crash
         if (lang == null || lang!!.isEmpty()) {

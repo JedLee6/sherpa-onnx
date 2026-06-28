@@ -376,7 +376,7 @@ class MainActivity : ComponentActivity() {
                                                     val sampleRate = TtsEngine.tts!!.sampleRate()
                                                     val allSamples = mutableListOf<FloatArray>()
 
-                                                    if (TtsEngine.isSupertonic) {
+                                                    if (TtsEngine.isSupertonic && TtsEngine.supertonicLang == "auto") {
                                                         val sentences = TextSegmenter.splitText(testText)
                                                         val sentencesInfo = mutableListOf<String>()
 
@@ -448,6 +448,9 @@ class MainActivity : ComponentActivity() {
                                                          val targetSpeed = TtsEngine.speed
                                                          Log.i(TAG, "Else branch debug - testText: '$testText', selectedTts: $selectedTts, nativeRate: $nativeRate, generatorRate: $generatorRate, factor: $factor, activeResampler: $activeResampler, speed: ${TtsEngine.speed}, targetSpeed: $targetSpeed")
                                                          val genConfig = GenerationConfig(sid = TtsEngine.speakerId, speed = targetSpeed)
+                                                         if (TtsEngine.isSupertonic) {
+                                                             genConfig.extra = mapOf("lang" to TtsEngine.supertonicLang)
+                                                         }
                                                          val audio =
                                                              selectedTts.generateWithConfigAndCallback(
                                                                  text = testText,
@@ -459,7 +462,10 @@ class MainActivity : ComponentActivity() {
                                                          } else {
                                                              audio.samples
                                                          }
-                                                         allSamples.add(processedSamples)
+                                                          allSamples.add(processedSamples)
+                                                          withContext(Dispatchers.Main) {
+                                                              detectedLanguagesText = ""
+                                                          }
                                                     }
 
                                                     val elapsed =

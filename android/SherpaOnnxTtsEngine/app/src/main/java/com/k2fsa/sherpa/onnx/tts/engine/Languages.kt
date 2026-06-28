@@ -4,6 +4,7 @@ object Languages {
     data class Language(val code: String, val name: String)
 
     val supportedLanguages = listOf(
+        Language("auto", "Auto-Detect"),
         Language("en", "English"),
         Language("zh", "Chinese"),
         Language("ko", "Korean"),
@@ -44,6 +45,7 @@ object Languages {
 
     fun getIso3Code(iso1: String): String {
         return when (iso1) {
+            "auto" -> "eng"
             "en" -> "eng"
             "zh" -> "zho"
             "ko" -> "kor"
