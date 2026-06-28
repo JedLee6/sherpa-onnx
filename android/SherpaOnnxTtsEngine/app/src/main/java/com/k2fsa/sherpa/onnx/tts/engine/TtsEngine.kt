@@ -19,10 +19,9 @@ const val MAX_TTS_SPEED = 5.0f
 
 object TtsEngine {
     var supertonicTts: OfflineTts? = null
-    var matchaTts: OfflineTts? = null
 
     var tts: OfflineTts?
-        get() = if (currentModel.id == "matcha-icefall-zh-baker") matchaTts else (supertonicTts ?: matchaTts)
+        get() = supertonicTts
         set(value) {
             // Backwards compatibility
         }
@@ -73,13 +72,7 @@ object TtsEngine {
     val isSupertonic: Boolean
         get() = currentModel.isSupertonic
 
-    val matchaPitchState: MutableState<Float> = mutableFloatStateOf(0.85f)
 
-    var matchaPitch: Float
-        get() = matchaPitchState.value
-        set(value) {
-            matchaPitchState.value = value
-        }
 
     init {
         // Models are now dynamically loaded via PreferenceHelper and Models object
@@ -87,7 +80,7 @@ object TtsEngine {
 
     fun createTts(context: Context) {
         Log.i(TAG, "Init Next-gen Kaldi TTS")
-        if (supertonicTts == null || matchaTts == null) {
+        if (supertonicTts == null) {
             initTts(context)
         }
     }
@@ -98,56 +91,24 @@ object TtsEngine {
 
     private fun initTts(context: Context) {
         val preferenceHelper = PreferenceHelper(context)
-        val modelId = preferenceHelper.getModel()
 
-        // 1. Always pre-initialize supertonic-3-tts
+        // Only initialize supertonic-3-tts
         try {
-            Log.i(TAG, "Pre-initializing supertonic-3-tts...")
+            Log.i(TAG, "Initializing supertonic-3-tts...")
             val (engine, config) = loadModel(context, "supertonic-3-tts")
             supertonicTts = engine
-            if (modelId == "supertonic-3-tts") {
-                currentModel = config
-                lang = config.lang
-            }
+            currentModel = config
+            lang = config.lang
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to pre-initialize supertonic-3-tts", e)
-        }
-
-        // 2. Always pre-initialize matcha-icefall-zh-baker
-        try {
-            Log.i(TAG, "Pre-initializing matcha-icefall-zh-baker...")
-            val (engine, config) = loadModel(context, "matcha-icefall-zh-baker")
-            matchaTts = engine
-            if (modelId == "matcha-icefall-zh-baker") {
-                currentModel = config
-                lang = config.lang
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to pre-initialize matcha-icefall-zh-baker", e)
-        }
-
-        // 3. If selected model is neither of the above (e.g., VITS), load it dynamically
-        if (modelId != "supertonic-3-tts" && modelId != "matcha-icefall-zh-baker") {
-            try {
-                Log.i(TAG, "Initializing selected model: $modelId")
-                val (engine, config) = loadModel(context, modelId)
-                currentModel = config
-                lang = config.lang
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to initialize selected model $modelId: $e")
-                val config = Models.getModel("supertonic-3-tts")
-                currentModel = config
-                lang = config.lang
-            }
+            Log.e(TAG, "Failed to initialize supertonic-3-tts", e)
         }
 
         speed = preferenceHelper.getSpeed()
         speakerId = preferenceHelper.getSid()
         supertonicLang = preferenceHelper.getLanguage("en")
-        matchaPitch = preferenceHelper.getMatchaPitch()
 
-        // Ensure lang is never null after init, so TtsService doesn't crash
-        if (lang == null) {
+        // Ensure lang is never null or empty after init, so TtsService doesn't crash
+        if (lang == null || lang!!.isEmpty()) {
             lang = "eng"
         }
     }

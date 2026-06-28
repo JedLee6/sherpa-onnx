@@ -5,6 +5,7 @@ object Languages {
 
     val supportedLanguages = listOf(
         Language("en", "English"),
+        Language("zh", "Chinese"),
         Language("ko", "Korean"),
         Language("ja", "Japanese"),
         Language("ar", "Arabic"),
@@ -44,6 +45,7 @@ object Languages {
     fun getIso3Code(iso1: String): String {
         return when (iso1) {
             "en" -> "eng"
+            "zh" -> "zho"
             "ko" -> "kor"
             "ja" -> "jpn"
             "ar" -> "ara"

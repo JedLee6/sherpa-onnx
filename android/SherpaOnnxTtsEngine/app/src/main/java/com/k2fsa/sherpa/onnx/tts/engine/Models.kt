@@ -51,54 +51,6 @@ object Models {
                 "sherpa-onnx-supertonic-3-tts-int8-2026-05-11/unicode_indexer.bin",
                 "sherpa-onnx-supertonic-3-tts-int8-2026-05-11/voice.bin",
             )
-        ),
-        ModelConfig(
-            id = "vits-piper-xiao_ya",
-            name = "xiao_ya-medium (VITS)",
-            modelDir = "vits-piper-zh_CN-xiao_ya-medium",
-            modelName = "zh_CN-xiao_ya-medium.onnx",
-            lexicon = "lexicon.txt",
-            lang = "zho",
-            requiredFiles = listOf(
-                "vits-piper-zh_CN-xiao_ya-medium/zh_CN-xiao_ya-medium.onnx",
-                "vits-piper-zh_CN-xiao_ya-medium/lexicon.txt",
-                "vits-piper-zh_CN-xiao_ya-medium/tokens.txt",
-            )
-        ),
-        ModelConfig(
-            id = "vits-piper-chaowen",
-            name = "chaowen-medium (VITS)",
-            modelDir = "vits-piper-zh_CN-chaowen-medium",
-            modelName = "zh_CN-chaowen-medium.onnx",
-            lexicon = "lexicon.txt",
-            lang = "zho",
-            requiredFiles = listOf(
-                "vits-piper-zh_CN-chaowen-medium/zh_CN-chaowen-medium.onnx",
-                "vits-piper-zh_CN-chaowen-medium/lexicon.txt",
-                "vits-piper-zh_CN-chaowen-medium/tokens.txt",
-            )
-        ),
-        ModelConfig(
-            id = "matcha-icefall-zh-baker",
-            name = "zh-baker (Matcha)",
-            modelDir = "matcha-icefall-zh-baker",
-            acousticModelName = "model-steps-3.onnx",
-            vocoder = "vocos-22khz-univ.onnx",
-            lexicon = "lexicon.txt",
-            lang = "zho",
-            dictDir = "matcha-icefall-zh-baker/dict",
-            ruleFsts = "matcha-icefall-zh-baker/phone.fst,matcha-icefall-zh-baker/date.fst,matcha-icefall-zh-baker/number.fst",
-            requiredFiles = listOf(
-                "matcha-icefall-zh-baker/model-steps-3.onnx",
-                "matcha-icefall-zh-baker/lexicon.txt",
-                "matcha-icefall-zh-baker/tokens.txt",
-                "vocos-22khz-univ.onnx",
-                "matcha-icefall-zh-baker/phone.fst",
-                "matcha-icefall-zh-baker/date.fst",
-                "matcha-icefall-zh-baker/number.fst",
-                "matcha-icefall-zh-baker/dict/jieba.dict.utf8",
-                "matcha-icefall-zh-baker/dict/hmm_model.utf8"
-            )
         )
     )
 

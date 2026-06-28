@@ -87,7 +87,17 @@ class TtsService : TextToSpeechService() {
     override fun onIsLanguageAvailable(_lang: String?, _country: String?, _variant: String?): Int {
         val lang = _lang ?: ""
 
-        if (lang == TtsEngine.lang || lang == TtsEngine.lang2) {
+        val iso1 = when (lang) {
+            "eng" -> "en"
+            "kor" -> "ko"
+            "jpn" -> "ja"
+            "zho", "cmn", "chi" -> "zh"
+            else -> {
+                Languages.supportedLanguages.find { Languages.getIso3Code(it.code) == lang }?.code
+            }
+        }
+
+        if (iso1 != null || lang == TtsEngine.lang || lang == TtsEngine.lang2) {
             return TextToSpeech.LANG_AVAILABLE
         }
 
@@ -103,12 +113,13 @@ class TtsService : TextToSpeechService() {
         Log.i(TAG, "onLoadLanguage: $_lang, $_country")
         val lang = _lang ?: ""
 
-        return if (lang == TtsEngine.lang || lang == TtsEngine.lang2) {
+        val isAvailable = onIsLanguageAvailable(lang, _country, _variant)
+        return if (isAvailable == TextToSpeech.LANG_AVAILABLE) {
             Log.i(TAG, "creating tts, lang :$lang")
             TtsEngine.createTts(application)
             TextToSpeech.LANG_AVAILABLE
         } else {
-            Log.i(TAG, "lang $lang not supported, tts engine lang: ${TtsEngine.lang}, ${TtsEngine.lang2}")
+            Log.i(TAG, "lang $lang not supported")
             TextToSpeech.LANG_NOT_SUPPORTED
         }
     }
@@ -164,19 +175,11 @@ class TtsService : TextToSpeechService() {
         }
         val isChinese = (iso1 == "zh")
 
-        val selectedTts = if (isChinese && TtsEngine.matchaTts != null) {
-            TtsEngine.matchaTts!!
-        } else {
-            TtsEngine.supertonicTts ?: TtsEngine.tts!!
-        }
+        val selectedTts = TtsEngine.supertonicTts ?: TtsEngine.tts!!
 
         val nativeRate = TtsEngine.tts!!.sampleRate()
         val generatorRate = selectedTts.sampleRate()
-        val factor = if (selectedTts == TtsEngine.matchaTts) {
-            TtsEngine.matchaPitch * (generatorRate.toFloat() / nativeRate)
-        } else {
-            generatorRate.toFloat() / nativeRate
-        }
+        val factor = generatorRate.toFloat() / nativeRate
 
         Log.i(TAG, "text: $text, engineSpeed: $engineSpeed, isChinese: $isChinese, nativeRate: $nativeRate, generatorRate: $generatorRate, factor: $factor")
 
@@ -210,12 +213,10 @@ class TtsService : TextToSpeechService() {
             return 1
         }
 
-        val targetSpeed = if (selectedTts == TtsEngine.matchaTts) engineSpeed / TtsEngine.matchaPitch else engineSpeed
+        val targetSpeed = engineSpeed
         Log.i(TAG, "TtsService debug - text: '$text', selectedTts: $selectedTts, nativeRate: $nativeRate, generatorRate: $generatorRate, factor: $factor, resampler: $resampler, engineSpeed: $engineSpeed, targetSpeed: $targetSpeed")
         val genConfig = GenerationConfig(sid = TtsEngine.speakerId, speed = targetSpeed)
-        if (selectedTts == TtsEngine.supertonicTts || selectedTts != TtsEngine.matchaTts) {
-            genConfig.extra = mapOf("lang" to iso1)
-        }
+        genConfig.extra = mapOf("lang" to iso1)
 
         selectedTts.generateWithConfigAndCallback(
             text = text,

@@ -182,21 +182,6 @@ class MainActivity : ComponentActivity() {
                                     )
                                 }
 
-                                if (TtsEngine.currentModel.id == "matcha-icefall-zh-baker") {
-                                    Column {
-                                        Text("Matcha Pitch " + String.format("%.2f", TtsEngine.matchaPitch))
-                                        Slider(
-                                            value = TtsEngine.matchaPitchState.value,
-                                            onValueChange = {
-                                                TtsEngine.matchaPitch = it
-                                                preferenceHelper.setMatchaPitch(it)
-                                            },
-                                            valueRange = 0.5f..1.5f,
-                                            modifier = Modifier.fillMaxWidth()
-                                        )
-                                    }
-                                }
-
                                 if (TtsEngine.isSupertonic) {
                                     var expanded by remember { mutableStateOf(false) }
                                     ExposedDropdownMenuBox(
@@ -240,19 +225,8 @@ class MainActivity : ComponentActivity() {
                                 }
 
 
-                                var testText by remember { mutableStateOf("") }
+                                var testText by remember { mutableStateOf("Hi. Nice to meet you, I'm Jed. Hallo. Freut mich, dich kennenzulernen, ich bin Jed. Bonjour. Ravi de te rencontrer, je suis Jed. Hola. Encantado de conocerte, soy Jed. Ciao. Piacere di conoscerti, sono Jed.") }
 
-                                // Update testText when the language or model changes
-                                androidx.compose.runtime.LaunchedEffect(
-                                    TtsEngine.supertonicLangState.value,
-                                    TtsEngine.modelState.value
-                                ) {
-                                    testText = getSampleText(
-                                        if (TtsEngine.isSupertonic) Languages.getIso3Code(
-                                            TtsEngine.supertonicLang
-                                        ) else (TtsEngine.lang ?: "")
-                                    )
-                                }
                                 var startEnabled by remember { mutableStateOf(true) }
                                 var playEnabled by remember { mutableStateOf(false) }
                                 var saveEnabled by remember { mutableStateOf(false) }
@@ -412,20 +386,11 @@ class MainActivity : ComponentActivity() {
                                                              Log.i(TAG, "Sentence: '$sentence', final mapped iso1: $iso1")
                                                             sentencesInfo.add("[$iso1] $sentence")
 
-                                                              val isChinese = (iso1 == "zh")
-                                                              val selectedTts = if (isChinese && TtsEngine.matchaTts != null) {
-                                                                  TtsEngine.matchaTts!!
-                                                              } else {
-                                                                  TtsEngine.supertonicTts ?: TtsEngine.tts!!
-                                                              }
+                                                              val selectedTts = TtsEngine.supertonicTts ?: TtsEngine.tts!!
 
                                                               val nativeRate = TtsEngine.tts!!.sampleRate()
                                                               val generatorRate = selectedTts.sampleRate()
-                                                              val factor = if (selectedTts == TtsEngine.matchaTts) {
-                                                                  TtsEngine.matchaPitch * (generatorRate.toFloat() / nativeRate)
-                                                              } else {
-                                                                  generatorRate.toFloat() / nativeRate
-                                                              }
+                                                              val factor = generatorRate.toFloat() / nativeRate
 
                                                               activeSampleRate = nativeRate
                                                               activeResampler = if (factor != 1.0f) {
@@ -433,12 +398,10 @@ class MainActivity : ComponentActivity() {
                                                               } else {
                                                                   null
                                                               }
-                                                              val targetSpeed = if (selectedTts == TtsEngine.matchaTts) TtsEngine.speed / TtsEngine.matchaPitch else TtsEngine.speed
-                                                              Log.i(TAG, "Sentence loop debug - sentence: '$sentence', selectedTts: $selectedTts, matchaTts: ${TtsEngine.matchaTts}, isMatcha: ${selectedTts == TtsEngine.matchaTts}, nativeRate: $nativeRate, generatorRate: $generatorRate, factor: $factor, activeResampler: $activeResampler, speed: ${TtsEngine.speed}, targetSpeed: $targetSpeed")
+                                                              val targetSpeed = TtsEngine.speed
+                                                              Log.i(TAG, "Sentence loop debug - sentence: '$sentence', selectedTts: $selectedTts, nativeRate: $nativeRate, generatorRate: $generatorRate, factor: $factor, activeResampler: $activeResampler, speed: ${TtsEngine.speed}, targetSpeed: $targetSpeed")
                                                               val genConfig = GenerationConfig(sid = TtsEngine.speakerId, speed = targetSpeed)
-                                                              if (selectedTts == TtsEngine.supertonicTts || selectedTts != TtsEngine.matchaTts) {
-                                                                  genConfig.extra = mapOf("lang" to iso1)
-                                                              }
+                                                              genConfig.extra = mapOf("lang" to iso1)
 
                                                               val audio = selectedTts.generateWithConfigAndCallback(
                                                                   text = sentence,
@@ -451,20 +414,16 @@ class MainActivity : ComponentActivity() {
                                                                   audio.samples
                                                               }
                                                               allSamples.add(processedSamples)
-                                                        }
-                                                        val newLanguagesText = sentencesInfo.joinToString("\n")
-                                                        withContext(Dispatchers.Main) {
-                                                            detectedLanguagesText = newLanguagesText
-                                                        }
+                                                         }
+                                                         val newLanguagesText = sentencesInfo.joinToString("\n")
+                                                         withContext(Dispatchers.Main) {
+                                                             detectedLanguagesText = newLanguagesText
+                                                         }
                                                     } else {
                                                          val selectedTts = TtsEngine.tts!!
                                                          val nativeRate = selectedTts.sampleRate()
                                                          val generatorRate = selectedTts.sampleRate()
-                                                         val factor = if (selectedTts == TtsEngine.matchaTts) {
-                                                             TtsEngine.matchaPitch * (generatorRate.toFloat() / nativeRate)
-                                                         } else {
-                                                             generatorRate.toFloat() / nativeRate
-                                                         }
+                                                         val factor = generatorRate.toFloat() / nativeRate
 
                                                          activeSampleRate = nativeRate
                                                          activeResampler = if (factor != 1.0f) {
@@ -472,7 +431,7 @@ class MainActivity : ComponentActivity() {
                                                          } else {
                                                              null
                                                          }
-                                                         val targetSpeed = if (selectedTts == TtsEngine.matchaTts) TtsEngine.speed / TtsEngine.matchaPitch else TtsEngine.speed
+                                                         val targetSpeed = TtsEngine.speed
                                                          Log.i(TAG, "Else branch debug - testText: '$testText', selectedTts: $selectedTts, nativeRate: $nativeRate, generatorRate: $generatorRate, factor: $factor, activeResampler: $activeResampler, speed: ${TtsEngine.speed}, targetSpeed: $targetSpeed")
                                                          val genConfig = GenerationConfig(sid = TtsEngine.speakerId, speed = targetSpeed)
                                                          val audio =
