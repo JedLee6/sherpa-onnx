@@ -395,7 +395,7 @@ class MainActivity : ComponentActivity() {
                                                                       Log.e(TAG, "Language identification failed", e)
                                                                       "und"
                                                                   }
-                                                                 Languages.mapGoogleMlKitToIso1(detected) ?: TtsEngine.supertonicLang
+                                                                  Languages.mapMediaPipeToIso1(detected) ?: "en"
                                                              }
                                                              Log.i(TAG, "Sentence: '$sentence', final mapped iso1: $iso1")
                                                             sentencesInfo.add("[$iso1] $sentence")

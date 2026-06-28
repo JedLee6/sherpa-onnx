@@ -91,6 +91,22 @@ object Languages {
         }
     }
 
+    fun mapMediaPipeToIso1(code: String?): String? {
+        if (code == null || code == "und" || code.isEmpty()) return null
+        val lowerCode = code.lowercase()
+        
+        // Handle special cases
+        if (lowerCode.startsWith("zh")) return "zh"
+        if (lowerCode.startsWith("ja")) return "ja"
+        
+        // Extract primary language code (e.g. "en" from "en-us" or "en_us")
+        val primaryCode = lowerCode.split("-", "_")[0]
+        
+        // Check if primaryCode is supported
+        val isSupported = supportedLanguages.any { it.code == primaryCode }
+        return if (isSupported) primaryCode else null
+    }
+
     fun detectCjkLanguage(text: String): String? {
         var hasKana = false
         var hasHangul = false

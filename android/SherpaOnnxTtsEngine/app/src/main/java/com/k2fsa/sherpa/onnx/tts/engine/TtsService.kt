@@ -187,7 +187,7 @@ class TtsService : TextToSpeechService() {
                     Log.e(TAG, "Language identification failed in TtsService", e)
                     "und"
                 }
-                Languages.mapGoogleMlKitToIso1(detected) ?: "en"
+                Languages.mapMediaPipeToIso1(detected) ?: "en"
             }
         } else {
             TtsEngine.supertonicLang
