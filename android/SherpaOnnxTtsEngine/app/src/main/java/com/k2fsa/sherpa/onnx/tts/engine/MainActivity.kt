@@ -61,17 +61,16 @@ import java.io.File
 import kotlin.time.TimeSource
 import java.text.BreakIterator
 import java.util.Locale
-import com.google.mlkit.nl.languageid.LanguageIdentification
-import com.google.android.gms.tasks.Tasks
+import com.google.mediapipe.tasks.core.BaseOptions
+import com.google.mediapipe.tasks.text.languagedetector.LanguageDetector
+import com.google.mediapipe.tasks.text.languagedetector.LanguageDetector.LanguageDetectorOptions
 
 const val TAG = "sherpa-onnx-tts-engine"
 
 class AudioChunk(val samples: FloatArray, val sampleRate: Int)
 
 class MainActivity : ComponentActivity() {
-    private val languageIdentifier by lazy {
-        LanguageIdentification.getClient()
-    }
+    private var languageDetector: LanguageDetector? = null
     // TODO(fangjun): Save settings in ttsViewModel
     private val ttsViewModel: TtsViewModel by viewModels()
 
@@ -91,6 +90,19 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        try {
+            val baseOptions = BaseOptions.builder()
+                .setModelAssetPath("language_detector.tflite")
+                .build()
+            val options = LanguageDetectorOptions.builder()
+                .setBaseOptions(baseOptions)
+                .build()
+            languageDetector = LanguageDetector.createFromOptions(this, options)
+            Log.i(TAG, "MediaPipe Language Detector initialized successfully")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to initialize MediaPipe Language Detector", e)
+        }
 
         Log.i(TAG, "Start to initialize TTS")
         TtsEngine.createTts(this)
@@ -375,12 +387,14 @@ class MainActivity : ComponentActivity() {
                                                                  Log.i(TAG, "Sentence: '$sentence', CJK language detected directly: $cjkLang")
                                                                  cjkLang
                                                              } else {
-                                                                 val detected = try {
-                                                                     Tasks.await(languageIdentifier.identifyLanguage(sentence))
-                                                                 } catch (e: Exception) {
-                                                                     Log.e(TAG, "Language identification failed", e)
-                                                                     "und"
-                                                                 }
+                                                                  val detected = try {
+                                                                      val result = languageDetector?.detect(sentence)
+                                                                      val prediction = result?.languagesAndScores()?.firstOrNull()
+                                                                      prediction?.languageCode() ?: "und"
+                                                                  } catch (e: Exception) {
+                                                                      Log.e(TAG, "Language identification failed", e)
+                                                                      "und"
+                                                                  }
                                                                  Languages.mapGoogleMlKitToIso1(detected) ?: TtsEngine.supertonicLang
                                                              }
                                                              Log.i(TAG, "Sentence: '$sentence', final mapped iso1: $iso1")
@@ -575,6 +589,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         stopMediaPlayer()
+        languageDetector?.close()
         super.onDestroy()
     }
 

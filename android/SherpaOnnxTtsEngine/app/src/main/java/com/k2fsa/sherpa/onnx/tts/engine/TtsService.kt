@@ -7,8 +7,9 @@ import android.speech.tts.SynthesisRequest
 import android.speech.tts.TextToSpeech
 import android.speech.tts.TextToSpeechService
 import android.util.Log
-import com.google.mlkit.nl.languageid.LanguageIdentification
-import com.google.android.gms.tasks.Tasks
+import com.google.mediapipe.tasks.core.BaseOptions
+import com.google.mediapipe.tasks.text.languagedetector.LanguageDetector
+import com.google.mediapipe.tasks.text.languagedetector.LanguageDetector.LanguageDetectorOptions
 
 /*
 https://developer.android.com/reference/java/util/Locale#getISO3Language()
@@ -57,13 +58,24 @@ Failed to get default language from engine com.k2fsa.sherpa.chapter5
 */
 
 class TtsService : TextToSpeechService() {
-    private val languageIdentifier by lazy {
-        LanguageIdentification.getClient()
-    }
+    private var languageDetector: LanguageDetector? = null
 
     override fun onCreate() {
         Log.i(TAG, "onCreate tts service")
         super.onCreate()
+
+        try {
+            val baseOptions = BaseOptions.builder()
+                .setModelAssetPath("language_detector.tflite")
+                .build()
+            val options = LanguageDetectorOptions.builder()
+                .setBaseOptions(baseOptions)
+                .build()
+            languageDetector = LanguageDetector.createFromOptions(this, options)
+            Log.i(TAG, "MediaPipe Language Detector initialized successfully in TtsService")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to initialize MediaPipe Language Detector in TtsService", e)
+        }
 
         // see https://github.com/Miserlou/Android-SDK-Samples/blob/master/TtsEngine/src/com/example/android/ttsengine/RobotSpeakTtsService.java#L68
         val currentLang = TtsEngine.lang
@@ -80,6 +92,7 @@ class TtsService : TextToSpeechService() {
 
     override fun onDestroy() {
         Log.i(TAG, "onDestroy tts service")
+        languageDetector?.close()
         super.onDestroy()
     }
 
@@ -166,7 +179,9 @@ class TtsService : TextToSpeechService() {
             cjkLang
         } else {
             val detected = try {
-                Tasks.await(languageIdentifier.identifyLanguage(text))
+                val result = languageDetector?.detect(text)
+                val prediction = result?.languagesAndScores()?.firstOrNull()
+                prediction?.languageCode() ?: "und"
             } catch (e: Exception) {
                 Log.e(TAG, "Language identification failed in TtsService", e)
                 "und"
