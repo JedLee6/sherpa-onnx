@@ -45,6 +45,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -122,7 +123,7 @@ class MainActivity : ComponentActivity() {
                     color = MaterialTheme.colorScheme.background
                 ) {
                     Scaffold(topBar = {
-                        TopAppBar(title = { Text("Next-gen Kaldi: TTS Engine") })
+                        TopAppBar(title = { Text(stringResource(R.string.app_bar_title)) })
                     }) {
                         Box(modifier = Modifier.padding(it)) {
                             val context = LocalContext.current
@@ -144,7 +145,7 @@ class MainActivity : ComponentActivity() {
                                         value = TtsEngine.currentModel.name,
                                         onValueChange = {},
                                         readOnly = true,
-                                        label = { Text("Model") },
+                                        label = { Text(stringResource(R.string.model_label)) },
                                         trailingIcon = {
                                             ExposedDropdownMenuDefaults.TrailingIcon(
                                                 expanded = expandedModel
@@ -168,11 +169,11 @@ class MainActivity : ComponentActivity() {
                                                         TtsEngine.updateTts(context)
                                                         initAudioTrack()
                                                     } else {
-                                                        Toast.makeText(
-                                                            context,
-                                                            "Model '${model.name}' is missing required files and cannot be loaded.",
-                                                            Toast.LENGTH_LONG
-                                                        ).show()
+                                                         Toast.makeText(
+                                                             context,
+                                                             context.getString(R.string.toast_model_missing_files, model.name),
+                                                             Toast.LENGTH_LONG
+                                                         ).show()
                                                     }
                                                     expandedModel = false
                                                 }
@@ -182,7 +183,7 @@ class MainActivity : ComponentActivity() {
                                 }
 
                                 Column {
-                                    Text("Speed " + String.format("%.1f", TtsEngine.speed))
+                                     Text(stringResource(R.string.speed_label, TtsEngine.speed))
                                     Slider(
                                         value = TtsEngine.speedState.value,
                                         onValueChange = {
@@ -207,7 +208,7 @@ class MainActivity : ComponentActivity() {
                                             value = Languages.getName(TtsEngine.supertonicLang),
                                             onValueChange = {},
                                             readOnly = true,
-                                            label = { Text("Language") },
+                                            label = { Text(stringResource(R.string.language_label)) },
                                             trailingIcon = {
                                                 ExposedDropdownMenuDefaults.TrailingIcon(
                                                     expanded = expanded
@@ -261,10 +262,10 @@ class MainActivity : ComponentActivity() {
                                                     input.copyTo(output)
                                                 }
                                             }
-                                            Toast.makeText(applicationContext, "Audio saved", Toast.LENGTH_SHORT).show()
+                                            Toast.makeText(applicationContext, getString(R.string.toast_audio_saved), Toast.LENGTH_SHORT).show()
                                         } catch (e: Exception) {
                                             Log.e(TAG, "Failed to save audio: $e")
-                                            Toast.makeText(applicationContext, "Failed to save audio", Toast.LENGTH_SHORT).show()
+                                            Toast.makeText(applicationContext, getString(R.string.toast_audio_save_failed), Toast.LENGTH_SHORT).show()
                                         }
                                     }
                                 }
@@ -287,7 +288,7 @@ class MainActivity : ComponentActivity() {
                                             preferenceHelper.setSid(TtsEngine.speakerId)
                                         },
                                         label = {
-                                            Text("Speaker ID: (0-${numSpeakers - 1})")
+                                             Text(stringResource(R.string.speaker_id_label, numSpeakers - 1))
                                         },
                                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                         modifier = Modifier
@@ -300,7 +301,7 @@ class MainActivity : ComponentActivity() {
                                 OutlinedTextField(
                                     value = testText,
                                     onValueChange = { testText = it },
-                                    label = { Text("Please input your text here") },
+                                    label = { Text(stringResource(R.string.input_label)) },
                                     maxLines = 10,
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -316,11 +317,11 @@ class MainActivity : ComponentActivity() {
                                         onClick = {
                                             Log.i(TAG, "Clicked, text: $testText")
                                             if (testText.isBlank() || testText.isEmpty()) {
-                                                Toast.makeText(
-                                                    applicationContext,
-                                                    "Please input some text to generate",
-                                                    Toast.LENGTH_SHORT
-                                                ).show()
+                                                 Toast.makeText(
+                                                     applicationContext,
+                                                     getString(R.string.toast_please_input_text),
+                                                     Toast.LENGTH_SHORT
+                                                 ).show()
                                             } else {
                                                 startEnabled = false
                                                 playEnabled = false
@@ -398,7 +399,11 @@ class MainActivity : ComponentActivity() {
                                                                   Languages.mapMediaPipeToIso1(detected) ?: "en"
                                                              }
                                                              Log.i(TAG, "Sentence: '$sentence', final mapped iso1: $iso1")
-                                                            sentencesInfo.add("[$iso1] $sentence")
+                                                             sentencesInfo.add("[$iso1] $sentence")
+                                                             val currentInfo = sentencesInfo.joinToString("\n")
+                                                             withContext(Dispatchers.Main) {
+                                                                 detectedLanguagesText = currentInfo
+                                                             }
 
                                                               val selectedTts = TtsEngine.supertonicTts ?: TtsEngine.tts!!
 
@@ -428,10 +433,6 @@ class MainActivity : ComponentActivity() {
                                                                   audio.samples
                                                               }
                                                               allSamples.add(processedSamples)
-                                                         }
-                                                         val newLanguagesText = sentencesInfo.joinToString("\n")
-                                                         withContext(Dispatchers.Main) {
-                                                             detectedLanguagesText = newLanguagesText
                                                          }
                                                     } else {
                                                          val selectedTts = TtsEngine.tts!!
@@ -482,15 +483,15 @@ class MainActivity : ComponentActivity() {
 
                                                     val audioDuration =
                                                         combinedSamples.size / sampleRate.toFloat()
-                                                    val RTF = String.format(
-                                                        "Number of threads: %d\nElapsed: %.3f s\nAudio duration: %.3f s\nRTF: %.3f/%.3f = %.3f",
-                                                        TtsEngine.tts!!.config.model.numThreads,
-                                                        elapsed,
-                                                        audioDuration,
-                                                        elapsed,
-                                                        audioDuration,
-                                                        if (audioDuration > 0) elapsed / audioDuration else 0f
-                                                    )
+                                                     val RTF = this@MainActivity.getString(
+                                                         R.string.rtf_format,
+                                                         TtsEngine.tts!!.config.model.numThreads,
+                                                         elapsed,
+                                                         audioDuration,
+                                                         elapsed,
+                                                         audioDuration,
+                                                         if (audioDuration > 0) elapsed / audioDuration else 0f
+                                                     )
 
                                                     scope.launch {
                                                         Log.i(TAG, "send 0 samples")
