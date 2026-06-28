@@ -247,7 +247,7 @@ class MainActivity : ComponentActivity() {
                                 }
 
 
-                                var testText by remember { mutableStateOf("Hi. Nice to meet you, I'm Jed. Hallo. Freut mich, dich kennenzulernen, ich bin Jed. Bonjour. Ravi de te rencontrer, je suis Jed. Hola. Encantado de conocerte, soy Jed. Ciao. Piacere di conoscerti, sono Jed.") }
+                                var testText by remember { mutableStateOf("Hi. Nice to meet you, I'm Jed. Hallo, freut mich, dich kennenzulernen, ich bin Jed. Bonjour. Ravi de te rencontrer, je suis Jed. Hola. Encantado de conocerte, soy Jed. Ciao. Piacere di conoscerti, sono Jed.") }
 
                                 var startEnabled by remember { mutableStateOf(true) }
                                 var playEnabled by remember { mutableStateOf(false) }
