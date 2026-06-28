@@ -113,6 +113,18 @@ object TextSegmenter {
         '\u1803'  // Mongolian Full Stop
     )
 
+    private val commas = setOf(',', '，', '、', '،', '\u104a')
+
+    private fun countWords(text: String): Int {
+        var count = 0
+        val latinWordRegex = Regex("[a-zA-Z0-9]+")
+        count += latinWordRegex.findAll(text).count()
+        
+        val cjkRegex = Regex(CJK_PATTERN)
+        count += cjkRegex.findAll(text).count()
+        return count
+    }
+
     private fun splitByPunctuation(input: String): List<String> {
         val tokens = mutableListOf<String>()
         val sb = StringBuilder()
@@ -142,9 +154,17 @@ object TextSegmenter {
                 }
                 
                 if (shouldSplit) {
-                    // End of sentence
-                    tokens.add(sb.toString())
-                    sb.clear()
+                    if (c in commas) {
+                        val segmentText = sb.toString()
+                        if (countWords(segmentText) > 4) {
+                            tokens.add(segmentText)
+                            sb.clear()
+                        }
+                    } else {
+                        // End of sentence
+                        tokens.add(sb.toString())
+                        sb.clear()
+                    }
                 }
             }
             i++
