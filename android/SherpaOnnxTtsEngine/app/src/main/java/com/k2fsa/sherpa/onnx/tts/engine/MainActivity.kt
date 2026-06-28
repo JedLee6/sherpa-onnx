@@ -279,32 +279,34 @@ class MainActivity : ComponentActivity() {
                                     }
                                 }
 
-                                val numSpeakers = TtsEngine.tts!!.numSpeakers()
-                                if (numSpeakers > 1) {
-                                    OutlinedTextField(
-                                        value = TtsEngine.speakerIdState.value.toString(),
-                                        onValueChange = {
-                                            if (it.isEmpty() || it.isBlank()) {
-                                                TtsEngine.speakerId = 0
-                                            } else {
-                                                try {
-                                                    TtsEngine.speakerId = it.toString().toInt()
-                                                } catch (ex: NumberFormatException) {
-                                                    Log.i(TAG, "Invalid input: $it")
+                                if (TtsEngine.isInitializedState.value && TtsEngine.tts != null) {
+                                    val numSpeakers = TtsEngine.tts!!.numSpeakers()
+                                    if (numSpeakers > 1) {
+                                        OutlinedTextField(
+                                            value = TtsEngine.speakerIdState.value.toString(),
+                                            onValueChange = {
+                                                if (it.isEmpty() || it.isBlank()) {
                                                     TtsEngine.speakerId = 0
+                                                } else {
+                                                    try {
+                                                        TtsEngine.speakerId = it.toString().toInt()
+                                                    } catch (ex: NumberFormatException) {
+                                                        Log.i(TAG, "Invalid input: $it")
+                                                        TtsEngine.speakerId = 0
+                                                    }
                                                 }
-                                            }
-                                            preferenceHelper.setSid(TtsEngine.speakerId)
-                                        },
-                                        label = {
-                                             Text(stringResource(R.string.speaker_id_label, numSpeakers - 1))
-                                        },
-                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(bottom = 16.dp)
-                                            .wrapContentHeight(),
-                                    )
+                                                preferenceHelper.setSid(TtsEngine.speakerId)
+                                            },
+                                            label = {
+                                                Text(stringResource(R.string.speaker_id_label, numSpeakers - 1))
+                                            },
+                                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(bottom = 16.dp)
+                                                .wrapContentHeight(),
+                                        )
+                                    }
                                 }
 
                                 OutlinedTextField(
@@ -661,7 +663,7 @@ class MainActivity : ComponentActivity() {
                 Log.e(TAG, "Error releasing old AudioTrack", e)
             }
         }
-        val sampleRate = TtsEngine.tts!!.sampleRate()
+        val sampleRate = TtsEngine.tts?.sampleRate() ?: 22050
         val bufLength = AudioTrack.getMinBufferSize(
             sampleRate,
             AudioFormat.CHANNEL_OUT_MONO,
