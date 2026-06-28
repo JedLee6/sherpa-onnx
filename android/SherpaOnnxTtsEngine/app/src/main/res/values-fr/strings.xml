@@ -17,5 +17,8 @@
     <string name="toast_no_audio_to_share">Aucun audio à partager</string>
     <string name="toast_model_missing_files">Le modèle \'%1$s\' n\'a pas les fichiers requis et ne peut pas être chargé.</string>
     <string name="toast_please_input_text">Veuillez saisir du texte à générer</string>
+    <string name="toast_tts_initializing">Initialisation du moteur TTS, veuillez patienter...</string>
+    <string name="toast_tts_initialized">Moteur TTS initialisé avec succès !</string>
+    <string name="toast_tts_failed">Échec de l\'initialisation du moteur TTS.</string>
     <string name="rtf_format">Nombre de threads: %1$d\nÉcoulé: %2$.3f s\nDurée audio: %3$.3f s\nRTF: %4$.3f/%5$.3f = %6$.3f</string>
 </resources>

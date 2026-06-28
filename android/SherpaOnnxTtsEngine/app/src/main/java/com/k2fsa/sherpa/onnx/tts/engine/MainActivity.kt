@@ -106,13 +106,13 @@ class MainActivity : ComponentActivity() {
         }
 
         Log.i(TAG, "Start to initialize TTS")
-        TtsEngine.createTts(this)
-        Log.i(TAG, "Finish initializing TTS")
-
-        Log.i(TAG, "Start to initialize AudioTrack")
-        initAudioTrack()
-        Log.i(TAG, "Finish initializing AudioTrack")
-        activeSampleRate = TtsEngine.tts!!.sampleRate()
+        TtsEngine.createTts(this) {
+            Log.i(TAG, "Finish initializing TTS")
+            Log.i(TAG, "Start to initialize AudioTrack")
+            initAudioTrack()
+            Log.i(TAG, "Finish initializing AudioTrack")
+            activeSampleRate = TtsEngine.tts!!.sampleRate()
+        }
 
         val preferenceHelper = PreferenceHelper(this)
         setContent {
@@ -135,8 +135,12 @@ class MainActivity : ComponentActivity() {
                             ) {
                                 var expandedModel by remember { mutableStateOf(false) }
                                 ExposedDropdownMenuBox(
-                                    expanded = expandedModel,
-                                    onExpandedChange = { expandedModel = !expandedModel },
+                                    expanded = expandedModel && !TtsEngine.isInitializingState.value,
+                                    onExpandedChange = {
+                                        if (!TtsEngine.isInitializingState.value) {
+                                            expandedModel = !expandedModel
+                                        }
+                                    },
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .padding(bottom = 16.dp)
@@ -166,8 +170,9 @@ class MainActivity : ComponentActivity() {
                                                 onClick = {
                                                     if (TtsEngine.validateModelAssets(context, model)) {
                                                         preferenceHelper.setModel(model.id)
-                                                        TtsEngine.updateTts(context)
-                                                        initAudioTrack()
+                                                        TtsEngine.updateTts(context) {
+                                                            initAudioTrack()
+                                                        }
                                                     } else {
                                                          Toast.makeText(
                                                              context,
@@ -198,8 +203,12 @@ class MainActivity : ComponentActivity() {
                                 if (TtsEngine.isSupertonic) {
                                     var expanded by remember { mutableStateOf(false) }
                                     ExposedDropdownMenuBox(
-                                        expanded = expanded,
-                                        onExpandedChange = { expanded = !expanded },
+                                        expanded = expanded && !TtsEngine.isInitializingState.value,
+                                        onExpandedChange = {
+                                            if (!TtsEngine.isInitializingState.value) {
+                                                expanded = !expanded
+                                            }
+                                        },
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .padding(bottom = 16.dp)
@@ -312,7 +321,7 @@ class MainActivity : ComponentActivity() {
 
                                 Row {
                                     Button(
-                                        enabled = startEnabled,
+                                        enabled = startEnabled && TtsEngine.isInitializedState.value && !TtsEngine.isInitializingState.value,
                                         modifier = Modifier.padding(5.dp),
                                         onClick = {
                                             Log.i(TAG, "Clicked, text: $testText")
@@ -517,7 +526,7 @@ class MainActivity : ComponentActivity() {
                                                 }
                                             }
                                         }) {
-                                        Text("Start")
+                                         Text(stringResource(R.string.btn_start))
                                     }
 
                                     Button(
@@ -529,7 +538,7 @@ class MainActivity : ComponentActivity() {
                                             track.flush()
                                             onClickPlay()
                                         }) {
-                                        Text("Play")
+                                         Text(stringResource(R.string.btn_play))
                                     }
 
                                     Button(
@@ -538,7 +547,7 @@ class MainActivity : ComponentActivity() {
                                             onClickStop()
                                             startEnabled = true
                                         }) {
-                                        Text("Stop")
+                                         Text(stringResource(R.string.btn_stop))
                                     }
                                 }
 
@@ -549,7 +558,7 @@ class MainActivity : ComponentActivity() {
                                         onClick = {
                                             saveLauncher.launch("generated.wav")
                                         }) {
-                                        Text("Save")
+                                         Text(stringResource(R.string.btn_save))
                                     }
 
                                     Button(
@@ -558,7 +567,7 @@ class MainActivity : ComponentActivity() {
                                         onClick = {
                                             val file = File(application.filesDir.absolutePath + "/generated.wav")
                                             if (!file.exists()) {
-                                                Toast.makeText(applicationContext, "No audio to share", Toast.LENGTH_SHORT).show()
+                                                 Toast.makeText(applicationContext, getString(R.string.toast_no_audio_to_share), Toast.LENGTH_SHORT).show()
                                             } else {
                                                 val uri = FileProvider.getUriForFile(
                                                     context,
@@ -570,10 +579,10 @@ class MainActivity : ComponentActivity() {
                                                     putExtra(Intent.EXTRA_STREAM, uri)
                                                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                                                 }
-                                                startActivity(Intent.createChooser(intent, "Share audio"))
+                                                 startActivity(Intent.createChooser(intent, getString(R.string.chooser_share_audio)))
                                             }
                                         }) {
-                                        Text("Share")
+                                         Text(stringResource(R.string.btn_share))
                                     }
                                 }
                                 if (rtfText.isNotEmpty()) {
@@ -583,7 +592,7 @@ class MainActivity : ComponentActivity() {
                                 }
                                 if (detectedLanguagesText.isNotEmpty()) {
                                     Row(modifier = Modifier.padding(top = 10.dp)) {
-                                        Text("子句子及对应语言:\n$detectedLanguagesText")
+                                         Text(stringResource(R.string.sub_sentences_label, detectedLanguagesText))
                                     }
                                 }
                             }

@@ -4,6 +4,8 @@ import PreferenceHelper
 import android.content.Context
 import android.content.res.AssetManager
 import android.util.Log
+import android.widget.Toast
+import com.k2fsa.sherpa.onnx.tts.engine.R
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -13,11 +15,18 @@ import com.k2fsa.sherpa.onnx.getOfflineTtsConfig
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 const val MIN_TTS_SPEED = 0.1f
 const val MAX_TTS_SPEED = 5.0f
 
 object TtsEngine {
+    val isInitializingState = mutableStateOf(false)
+    val isInitializedState = mutableStateOf(false)
+
     var supertonicTts: OfflineTts? = null
 
     var tts: OfflineTts?
@@ -78,15 +87,34 @@ object TtsEngine {
         // Models are now dynamically loaded via PreferenceHelper and Models object
     }
 
-    fun createTts(context: Context) {
+    fun createTts(context: Context, onComplete: (() -> Unit)? = null) {
         Log.i(TAG, "Init Next-gen Kaldi TTS")
         if (supertonicTts == null) {
-            initTts(context)
+            updateTts(context, onComplete)
+        } else {
+            isInitializedState.value = true
+            onComplete?.invoke()
         }
     }
 
-    fun updateTts(context: Context) {
-        initTts(context)
+    fun updateTts(context: Context, onComplete: (() -> Unit)? = null) {
+        isInitializingState.value = true
+        isInitializedState.value = false
+        Toast.makeText(context.applicationContext, context.getString(R.string.toast_tts_initializing), Toast.LENGTH_SHORT).show()
+        CoroutineScope(Dispatchers.IO).launch {
+            initTts(context)
+            withContext(Dispatchers.Main) {
+                isInitializingState.value = false
+                val success = supertonicTts != null
+                isInitializedState.value = success
+                if (success) {
+                    Toast.makeText(context.applicationContext, context.getString(R.string.toast_tts_initialized), Toast.LENGTH_SHORT).show()
+                    onComplete?.invoke()
+                } else {
+                    Toast.makeText(context.applicationContext, context.getString(R.string.toast_tts_failed), Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
     }
 
     private fun initTts(context: Context) {
