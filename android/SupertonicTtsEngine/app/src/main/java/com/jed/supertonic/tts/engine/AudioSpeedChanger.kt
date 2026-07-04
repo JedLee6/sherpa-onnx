@@ -2,9 +2,9 @@ package com.jed.supertonic.tts.engine
 
 class AudioSpeedChanger(val sampleRate: Int, val speed: Float) {
     private val sonic: Sonic? = if (speed != 1.0f) Sonic(sampleRate, 1).apply {
-        this.speed = speed
-        this.pitch = 1.0f
-        this.rate = 1.0f
+        this.setSpeed(speed)
+        this.setPitch(1.0f)
+        this.setRate(1.0f)
     } else null
 
     fun process(inputSamples: FloatArray): FloatArray {
