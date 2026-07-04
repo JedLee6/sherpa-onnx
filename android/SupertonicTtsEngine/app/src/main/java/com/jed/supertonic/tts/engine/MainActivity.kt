@@ -1,0 +1,823 @@
+@file:OptIn(ExperimentalMaterial3Api::class)
+
+package com.jed.supertonic.tts.engine
+
+import PreferenceHelper
+import android.content.Intent
+import android.media.AudioAttributes
+import android.media.AudioFormat
+import android.media.AudioManager
+import android.media.AudioTrack
+import android.media.MediaPlayer
+import android.net.Uri
+import android.os.Bundle
+import android.util.Log
+import android.widget.Toast
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.viewModels
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.unit.dp
+import androidx.core.content.FileProvider
+import com.k2fsa.sherpa.onnx.GenerationConfig
+import com.jed.supertonic.tts.engine.ui.theme.SupertonicTtsEngineTheme
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.File
+import kotlin.time.TimeSource
+import java.text.BreakIterator
+import java.util.Locale
+import com.google.mediapipe.tasks.core.BaseOptions
+import com.google.mediapipe.tasks.text.languagedetector.LanguageDetector
+import com.google.mediapipe.tasks.text.languagedetector.LanguageDetector.LanguageDetectorOptions
+
+const val TAG = "sherpa-onnx-tts-engine"
+
+class AudioChunk(val samples: FloatArray, val sampleRate: Int)
+
+data class VoiceOption(
+    val id: Int,
+    val name: String,
+    val description: String,
+    val useCases: String
+)
+
+val voicesList = listOf(
+    VoiceOption(0, "F1", "Calm female voice with a slightly low tone; steady and composed.", "Customer service, guided instructions, meditative content, professional narration."),
+    VoiceOption(1, "F2", "Bright, cheerful female voice; lively, playful, and youthful with spirited energy.", "Youth content, playful ads, social media videos, character voices."),
+    VoiceOption(2, "F3", "Clear, professional announcer-style female voice; articulate and broadcast-ready.", "Commercials, documentaries, news-style narration, formal presentations."),
+    VoiceOption(3, "F4", "Crisp, confident female voice; distinct and expressive with strong delivery.", "Business explainers, training videos, pitch decks, product announcements."),
+    VoiceOption(4, "F5", "Kind, gentle female voice; soft-spoken, calm, and naturally soothing.", "Audiobooks, supportive messages, wellness content, empathetic narration."),
+    VoiceOption(5, "M1", "Lively, upbeat male voice with confident energy and a standard, clear tone.", "Promotional videos, upbeat explainers, general-purpose narration, casual announcements."),
+    VoiceOption(6, "M2", "Deep, robust male voice; calm, composed, and serious with a grounded presence.", "Corporate content, serious announcements, documentaries, formal guidance."),
+    VoiceOption(7, "M3", "Polished, authoritative male voice; confident and trustworthy with strong presentation quality.", "Business presentations, leadership messages, investor briefings, high-trust narration."),
+    VoiceOption(8, "M4", "Soft, neutral-toned male voice; gentle and approachable with a youthful, friendly quality.", "Educational content, friendly explainers, onboarding guides, youth-oriented narration."),
+    VoiceOption(9, "M5", "Warm, soft-spoken male voice; calm and soothing with a natural storytelling quality.", "Audiobooks, relaxation content, bedtime stories, reflective or emotional narration.")
+)
+
+class MainActivity : ComponentActivity() {
+    private var languageDetector: LanguageDetector? = null
+    // TODO(fangjun): Save settings in ttsViewModel
+    private val ttsViewModel: TtsViewModel by viewModels()
+
+    private var mediaPlayer: MediaPlayer? = null
+
+    // see
+    // https://developer.android.com/reference/kotlin/android/media/AudioTrack
+    private lateinit var track: AudioTrack
+
+    private var stopped: Boolean = false
+
+    private var samplesChannel = Channel<AudioChunk>(capacity = 128)
+    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private var activeResampler: RealtimeResampler? = null
+    private var activeSampleRate: Int = 22050
+
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+
+        try {
+            val baseOptions = BaseOptions.builder()
+                .setModelAssetPath("language_detector.tflite")
+                .build()
+            val options = LanguageDetectorOptions.builder()
+                .setBaseOptions(baseOptions)
+                .build()
+            languageDetector = LanguageDetector.createFromOptions(this, options)
+            Log.i(TAG, "MediaPipe Language Detector initialized successfully")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to initialize MediaPipe Language Detector", e)
+        }
+
+        Log.i(TAG, "Start to initialize TTS")
+        TtsEngine.createTts(this) {
+            Log.i(TAG, "Finish initializing TTS")
+            Log.i(TAG, "Start to initialize AudioTrack")
+            initAudioTrack()
+            Log.i(TAG, "Finish initializing AudioTrack")
+            activeSampleRate = TtsEngine.tts!!.sampleRate()
+        }
+
+        val preferenceHelper = PreferenceHelper(this)
+        setContent {
+            SupertonicTtsEngineTheme {
+                // A surface container using the 'background' color from the theme
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.background
+                ) {
+                    Scaffold(topBar = {
+                        TopAppBar(title = { Text(stringResource(R.string.app_bar_title)) })
+                    }) {
+                        Box(modifier = Modifier.padding(it)) {
+                            val context = LocalContext.current
+                            val mainScrollState = rememberScrollState()
+                            Column(
+                                modifier = Modifier
+                                    .padding(16.dp)
+                                    .verticalScroll(mainScrollState)
+                            ) {
+                                var expandedModel by remember { mutableStateOf(false) }
+                                ExposedDropdownMenuBox(
+                                    expanded = expandedModel && !TtsEngine.isInitializingState.value,
+                                    onExpandedChange = {
+                                        if (!TtsEngine.isInitializingState.value) {
+                                            expandedModel = !expandedModel
+                                        }
+                                    },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(bottom = 16.dp)
+                                ) {
+                                    OutlinedTextField(
+                                        value = TtsEngine.currentModel.name,
+                                        onValueChange = {},
+                                        readOnly = true,
+                                        label = { Text(stringResource(R.string.model_label)) },
+                                        trailingIcon = {
+                                            ExposedDropdownMenuDefaults.TrailingIcon(
+                                                expanded = expandedModel
+                                            )
+                                        },
+                                        colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
+                                        modifier = Modifier
+                                            .menuAnchor()
+                                            .fillMaxWidth()
+                                    )
+                                    ExposedDropdownMenu(
+                                        expanded = expandedModel,
+                                        onDismissRequest = { expandedModel = false }
+                                    ) {
+                                        Models.supportedModels.forEach { model ->
+                                            DropdownMenuItem(
+                                                text = { Text(model.name) },
+                                                onClick = {
+                                                    if (TtsEngine.validateModelAssets(context, model)) {
+                                                        preferenceHelper.setModel(model.id)
+                                                        TtsEngine.updateTts(context) {
+                                                            initAudioTrack()
+                                                        }
+                                                    } else {
+                                                         Toast.makeText(
+                                                             context,
+                                                             context.getString(R.string.toast_model_missing_files, model.name),
+                                                             Toast.LENGTH_LONG
+                                                         ).show()
+                                                    }
+                                                    expandedModel = false
+                                                }
+                                            )
+                                        }
+                                    }
+                                }
+
+                                Column {
+                                     Text(stringResource(R.string.speed_label, TtsEngine.speed))
+                                    Slider(
+                                        value = TtsEngine.speedState.value,
+                                        onValueChange = {
+                                            TtsEngine.speed = it
+                                            preferenceHelper.setSpeed(it)
+                                        },
+                                        valueRange = MIN_TTS_SPEED..MAX_TTS_SPEED,
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                }
+
+                                if (TtsEngine.isSupertonic) {
+                                    var expanded by remember { mutableStateOf(false) }
+                                    ExposedDropdownMenuBox(
+                                        expanded = expanded && !TtsEngine.isInitializingState.value,
+                                        onExpandedChange = {
+                                            if (!TtsEngine.isInitializingState.value) {
+                                                expanded = !expanded
+                                            }
+                                        },
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(bottom = 16.dp)
+                                    ) {
+                                        OutlinedTextField(
+                                            value = Languages.getName(TtsEngine.supertonicLang),
+                                            onValueChange = {},
+                                            readOnly = true,
+                                            label = { Text(stringResource(R.string.language_label)) },
+                                            trailingIcon = {
+                                                ExposedDropdownMenuDefaults.TrailingIcon(
+                                                    expanded = expanded
+                                                )
+                                            },
+                                            colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
+                                            modifier = Modifier
+                                                .menuAnchor()
+                                                .fillMaxWidth()
+                                        )
+                                        ExposedDropdownMenu(
+                                            expanded = expanded,
+                                            onDismissRequest = { expanded = false }
+                                        ) {
+                                            Languages.supportedLanguages.forEach { language ->
+                                                DropdownMenuItem(
+                                                    text = { Text(language.name) },
+                                                    onClick = {
+                                                        TtsEngine.supertonicLang = language.code
+                                                        preferenceHelper.setLanguage(language.code)
+                                                        expanded = false
+                                                    }
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+
+
+                                var testText by remember { mutableStateOf("Hi. Nice to meet you, I'm Jed. Hallo, freut mich, dich kennenzulernen, ich bin Jed. Bonjour. Ravi de te rencontrer, je suis Jed. Hola. Encantado de conocerte, soy Jed. Ciao. Piacere di conoscerti, sono Jed.") }
+
+                                var startEnabled by remember { mutableStateOf(true) }
+                                var playEnabled by remember { mutableStateOf(false) }
+                                var saveEnabled by remember { mutableStateOf(false) }
+                                var shareEnabled by remember { mutableStateOf(false) }
+                                val logs = remember { mutableStateListOf<String>() }
+
+                                val saveLauncher = rememberLauncherForActivityResult(
+                                    contract = ActivityResultContracts.CreateDocument("audio/wav")
+                                ) { uri ->
+                                    if (uri != null) {
+                                        try {
+                                            val srcFile = File(application.filesDir.absolutePath + "/generated.wav")
+                                            contentResolver.openOutputStream(uri)?.use { output ->
+                                                srcFile.inputStream().use { input ->
+                                                    input.copyTo(output)
+                                                }
+                                            }
+                                            Toast.makeText(applicationContext, getString(R.string.toast_audio_saved), Toast.LENGTH_SHORT).show()
+                                            logs.add("Saved audio to: $uri")
+                                        } catch (e: Exception) {
+                                            Log.e(TAG, "Failed to save audio: $e")
+                                            Toast.makeText(applicationContext, getString(R.string.toast_audio_save_failed), Toast.LENGTH_SHORT).show()
+                                            logs.add("Failed to save audio: ${e.message}")
+                                        }
+                                    }
+                                }
+
+                                 if (TtsEngine.isInitializedState.value && TtsEngine.tts != null) {
+                                     val numSpeakers = TtsEngine.tts!!.numSpeakers()
+                                     if (numSpeakers == 10) {
+                                         var expandedVoice by remember { mutableStateOf(false) }
+                                         val selectedVoice = voicesList.find { it.id == TtsEngine.speakerId } ?: voicesList[0]
+
+                                         ExposedDropdownMenuBox(
+                                             expanded = expandedVoice && !TtsEngine.isInitializingState.value,
+                                             onExpandedChange = {
+                                                 if (!TtsEngine.isInitializingState.value) {
+                                                     expandedVoice = !expandedVoice
+                                                 }
+                                             },
+                                             modifier = Modifier
+                                                 .fillMaxWidth()
+                                                 .padding(bottom = 16.dp)
+                                         ) {
+                                             OutlinedTextField(
+                                                 value = "${selectedVoice.name} (${if (selectedVoice.id < 5) "Female" else "Male"}) - ${selectedVoice.description}",
+                                                 onValueChange = {},
+                                                 readOnly = true,
+                                                 label = { Text(stringResource(R.string.voice_speaker_label)) },
+                                                 trailingIcon = {
+                                                     ExposedDropdownMenuDefaults.TrailingIcon(
+                                                         expanded = expandedVoice
+                                                     )
+                                                 },
+                                                 colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
+                                                 modifier = Modifier
+                                                     .menuAnchor()
+                                                     .fillMaxWidth()
+                                             )
+                                             ExposedDropdownMenu(
+                                                 expanded = expandedVoice,
+                                                 onDismissRequest = { expandedVoice = false }
+                                             ) {
+                                                 voicesList.forEach { voice ->
+                                                     DropdownMenuItem(
+                                                         text = {
+                                                             Column(modifier = Modifier.padding(vertical = 4.dp)) {
+                                                                 Text(
+                                                                     text = "${voice.name} (${if (voice.id < 5) "Female" else "Male"})",
+                                                                     style = MaterialTheme.typography.titleMedium,
+                                                                     color = MaterialTheme.colorScheme.primary
+                                                                 )
+                                                                 Text(
+                                                                     text = voice.description,
+                                                                     style = MaterialTheme.typography.bodyMedium
+                                                                 )
+                                                                 Text(
+                                                                     text = "Use Cases: ${voice.useCases}",
+                                                                     style = MaterialTheme.typography.bodySmall,
+                                                                     color = MaterialTheme.colorScheme.outline
+                                                                 )
+                                                             }
+                                                         },
+                                                         onClick = {
+                                                             TtsEngine.speakerId = voice.id
+                                                             preferenceHelper.setSid(voice.id)
+                                                             expandedVoice = false
+                                                         }
+                                                     )
+                                                 }
+                                             }
+                                         }
+                                     } else if (numSpeakers > 1) {
+                                         OutlinedTextField(
+                                             value = TtsEngine.speakerIdState.value.toString(),
+                                             onValueChange = {
+                                                 if (it.isEmpty() || it.isBlank()) {
+                                                     TtsEngine.speakerId = 0
+                                                 } else {
+                                                     try {
+                                                         TtsEngine.speakerId = it.toString().toInt()
+                                                     } catch (ex: NumberFormatException) {
+                                                         Log.i(TAG, "Invalid input: $it")
+                                                         TtsEngine.speakerId = 0
+                                                     }
+                                                 }
+                                                 preferenceHelper.setSid(TtsEngine.speakerId)
+                                             },
+                                             label = {
+                                                 Text(stringResource(R.string.speaker_id_label, numSpeakers - 1))
+                                             },
+                                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                             modifier = Modifier
+                                                 .fillMaxWidth()
+                                                 .padding(bottom = 16.dp)
+                                                 .wrapContentHeight(),
+                                         )
+                                     }
+                                 }
+
+                                OutlinedTextField(
+                                    value = testText,
+                                    onValueChange = { testText = it },
+                                    label = { Text(stringResource(R.string.input_label)) },
+                                    maxLines = 10,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(bottom = 16.dp)
+                                        .wrapContentHeight(),
+                                    singleLine = false,
+                                )
+
+                                Row {
+                                    Button(
+                                        enabled = startEnabled && TtsEngine.isInitializedState.value && !TtsEngine.isInitializingState.value,
+                                        modifier = Modifier.padding(5.dp),
+                                        onClick = {
+                                            Log.i(TAG, "Clicked, text: $testText")
+                                            if (testText.isBlank() || testText.isEmpty()) {
+                                                 Toast.makeText(
+                                                     applicationContext,
+                                                     getString(R.string.toast_please_input_text),
+                                                     Toast.LENGTH_SHORT
+                                                 ).show()
+                                            } else {
+                                                startEnabled = false
+                                                playEnabled = false
+                                                saveEnabled = false
+                                                shareEnabled = false
+                                                stopped = false
+                                                logs.clear()
+                                                logs.add("Start synthesizing: $testText")
+
+                                                track.pause()
+                                                track.flush()
+                                                track.play()
+                                                Log.i(TAG, "Started with text $testText")
+
+                                                scope.launch {
+                                                    for (chunk in samplesChannel) {
+                                                        val samples = chunk.samples
+                                                        if (samples.isEmpty()) {
+                                                            break
+                                                        }
+
+                                                        if (track.playbackRate != chunk.sampleRate) {
+                                                            track.playbackRate = chunk.sampleRate
+                                                        }
+
+                                                        Log.i(
+                                                            TAG,
+                                                            "Received ${samples.count()} samples"
+                                                        )
+                                                        track.write(
+                                                            samples,
+                                                            0,
+                                                            samples.size,
+                                                            AudioTrack.WRITE_BLOCKING
+                                                        )
+                                                        if (stopped) {
+                                                            break
+                                                        }
+                                                    }
+                                                    Log.i(TAG, "Draining the channel")
+
+                                                    // drain remaining
+                                                    while (!samplesChannel.isEmpty) {
+                                                        samplesChannel.tryReceive().getOrNull()
+                                                    }
+                                                    Log.i(TAG, "Channel drained")
+
+                                                }
+
+                                                CoroutineScope(Dispatchers.Default).launch {
+                                                    val timeSource = TimeSource.Monotonic
+                                                    val startTime = timeSource.markNow()
+                                                    val sampleRate = TtsEngine.tts!!.sampleRate()
+                                                    val allSamples = mutableListOf<FloatArray>()
+
+                                                    if (TtsEngine.isSupertonic) {
+                                                         val sentences = TextSegmenter.splitText(testText)
+                                                         withContext(Dispatchers.Main) {
+                                                              logs.add("Split text into ${sentences.size} sentences.")
+                                                         }
+
+                                                         for (sentence in sentences) {
+                                                             if (stopped) break
+                                                              val iso1 = if (TtsEngine.supertonicLang == "auto") {
+                                                                  val cjkLang = Languages.detectCjkLanguage(sentence)
+                                                                  if (cjkLang != null) {
+                                                                      Log.i(TAG, "Sentence: '$sentence', CJK language detected directly: $cjkLang")
+                                                                      cjkLang
+                                                                  } else {
+                                                                       val detected = try {
+                                                                           val result = languageDetector?.detect(sentence)
+                                                                           val prediction = result?.languagesAndScores()?.firstOrNull()
+                                                                           prediction?.languageCode() ?: "und"
+                                                                       } catch (e: Exception) {
+                                                                           Log.e(TAG, "Language identification failed", e)
+                                                                           "und"
+                                                                       }
+                                                                       Languages.mapMediaPipeToIso1(detected) ?: "en"
+                                                                  }
+                                                              } else {
+                                                                  TtsEngine.supertonicLang
+                                                              }
+                                                              Log.i(TAG, "Sentence: '$sentence', final mapped iso1: $iso1")
+                                                              withContext(Dispatchers.Main) {
+                                                                  logs.add("[$iso1] $sentence")
+                                                              }
+
+                                                               val selectedTts = TtsEngine.supertonicTts ?: TtsEngine.tts!!
+
+                                                               val nativeRate = TtsEngine.tts!!.sampleRate()
+                                                               val generatorRate = selectedTts.sampleRate()
+                                                               val factor = generatorRate.toFloat() / nativeRate
+
+                                                               activeSampleRate = nativeRate
+                                                               activeResampler = if (factor != 1.0f) {
+                                                                   RealtimeResampler(factor)
+                                                               } else {
+                                                                   null
+                                                               }
+                                                               val targetSpeed = TtsEngine.speed
+                                                               Log.i(TAG, "Sentence loop debug - sentence: '$sentence', selectedTts: $selectedTts, nativeRate: $nativeRate, generatorRate: $generatorRate, factor: $factor, activeResampler: $activeResampler, speed: ${TtsEngine.speed}, targetSpeed: $targetSpeed")
+                                                               val genConfig = GenerationConfig(sid = TtsEngine.speakerId, speed = targetSpeed)
+                                                               genConfig.extra = mapOf("lang" to iso1)
+
+                                                               val audio = selectedTts.generateWithConfigAndCallback(
+                                                                   text = sentence,
+                                                                   config = genConfig,
+                                                                   callback = ::callback,
+                                                               )
+                                                               val processedSamples = if (activeResampler != null) {
+                                                                   RealtimeResampler(factor).process(audio.samples)
+                                                               } else {
+                                                                   audio.samples
+                                                               }
+                                                               allSamples.add(processedSamples)
+                                                          }
+                                                     } else {
+                                                          val selectedTts = TtsEngine.tts!!
+                                                          val nativeRate = selectedTts.sampleRate()
+                                                          val generatorRate = selectedTts.sampleRate()
+                                                          val factor = generatorRate.toFloat() / nativeRate
+
+                                                          activeSampleRate = nativeRate
+                                                          activeResampler = if (factor != 1.0f) {
+                                                              RealtimeResampler(factor)
+                                                          } else {
+                                                              null
+                                                          }
+                                                          val targetSpeed = TtsEngine.speed
+                                                          Log.i(TAG, "Else branch debug - testText: '$testText', selectedTts: $selectedTts, nativeRate: $nativeRate, generatorRate: $generatorRate, factor: $factor, activeResampler: $activeResampler, speed: ${TtsEngine.speed}, targetSpeed: $targetSpeed")
+                                                          val genConfig = GenerationConfig(sid = TtsEngine.speakerId, speed = targetSpeed)
+                                                          withContext(Dispatchers.Main) {
+                                                              logs.add("Generating audio (lang: ${TtsEngine.lang})...")
+                                                          }
+                                                          val audio =
+                                                              selectedTts.generateWithConfigAndCallback(
+                                                                  text = testText,
+                                                                  config = genConfig,
+                                                                  callback = ::callback,
+                                                              )
+                                                          val processedSamples = if (activeResampler != null) {
+                                                              RealtimeResampler(factor).process(audio.samples)
+                                                          } else {
+                                                              audio.samples
+                                                          }
+                                                           allSamples.add(processedSamples)
+                                                     }
+
+                                                    val elapsed =
+                                                        startTime.elapsedNow().inWholeMilliseconds.toFloat() / 1000
+
+                                                    var totalSamplesCount = 0
+                                                    for (s in allSamples) totalSamplesCount += s.size
+                                                    val combinedSamples = FloatArray(totalSamplesCount)
+                                                    var offset = 0
+                                                    for (s in allSamples) {
+                                                        s.copyInto(combinedSamples, offset)
+                                                        offset += s.size
+                                                    }
+
+                                                    val audioDuration =
+                                                        combinedSamples.size / sampleRate.toFloat()
+                                                     val RTF = this@MainActivity.getString(
+                                                         R.string.rtf_format,
+                                                         TtsEngine.tts!!.config.model.numThreads,
+                                                         elapsed,
+                                                         audioDuration,
+                                                         elapsed,
+                                                         audioDuration,
+                                                         if (audioDuration > 0) elapsed / audioDuration else 0f
+                                                     )
+
+                                                    scope.launch {
+                                                        Log.i(TAG, "send 0 samples")
+                                                             samplesChannel.send(AudioChunk(FloatArray(0), 22050))
+                                                        Log.i(TAG, "send 0 samples done")
+                                                    }
+
+                                                    val filename =
+                                                        application.filesDir.absolutePath + "/generated.wav"
+
+                                                    val combinedAudio = com.k2fsa.sherpa.onnx.GeneratedAudio(combinedSamples, sampleRate)
+                                                    val ok = combinedSamples.isNotEmpty() && combinedAudio.save(filename)
+
+                                                    withContext(Dispatchers.Main) {
+                                                        startEnabled = true
+                                                        if (ok) {
+                                                            playEnabled = true
+                                                            saveEnabled = true
+                                                            shareEnabled = true
+                                                            logs.add("Generation completed successfully.")
+                                                        } else {
+                                                            logs.add("Generation failed.")
+                                                        }
+                                                        logs.add(RTF)
+                                                    }
+                                                }
+                                            }
+                                        }) {
+                                         Text(stringResource(R.string.btn_start))
+                                    }
+
+                                    Button(
+                                        modifier = Modifier.padding(5.dp),
+                                        enabled = playEnabled,
+                                        onClick = {
+                                            stopped = true
+                                            track.pause()
+                                            track.flush()
+                                            onClickPlay()
+                                            logs.add("Playing generated audio...")
+                                        }) {
+                                         Text(stringResource(R.string.btn_play))
+                                    }
+
+                                    Button(
+                                        modifier = Modifier.padding(5.dp),
+                                        onClick = {
+                                            onClickStop()
+                                            startEnabled = true
+                                            logs.add("Synthesis stopped by user.")
+                                        }) {
+                                         Text(stringResource(R.string.btn_stop))
+                                    }
+                                }
+
+                                Row {
+                                    Button(
+                                        enabled = saveEnabled,
+                                        modifier = Modifier.padding(5.dp),
+                                        onClick = {
+                                            saveLauncher.launch("generated.wav")
+                                        }) {
+                                         Text(stringResource(R.string.btn_save))
+                                    }
+
+                                    Button(
+                                        enabled = shareEnabled,
+                                        modifier = Modifier.padding(5.dp),
+                                        onClick = {
+                                            val file = File(application.filesDir.absolutePath + "/generated.wav")
+                                            if (!file.exists()) {
+                                                 Toast.makeText(applicationContext, getString(R.string.toast_no_audio_to_share), Toast.LENGTH_SHORT).show()
+                                                 logs.add("No audio to share (file does not exist).")
+                                            } else {
+                                                logs.add("Sharing audio file...")
+                                                val uri = FileProvider.getUriForFile(
+                                                    context,
+                                                    "com.jed.supertonic.tts.engine.fileprovider",
+                                                    file
+                                                )
+                                                val intent = Intent(Intent.ACTION_SEND).apply {
+                                                    type = "audio/wav"
+                                                    putExtra(Intent.EXTRA_STREAM, uri)
+                                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                                }
+                                                 startActivity(Intent.createChooser(intent, getString(R.string.chooser_share_audio)))
+                                            }
+                                        }) {
+                                         Text(stringResource(R.string.btn_share))
+                                    }
+                                }
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(500.dp)
+                                        .padding(top = 16.dp)
+                                        .background(
+                                            color = MaterialTheme.colorScheme.surfaceVariant,
+                                            shape = RoundedCornerShape(12.dp)
+                                        )
+                                        .border(
+                                            width = 1.dp,
+                                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
+                                            shape = RoundedCornerShape(12.dp)
+                                        )
+                                ) {
+                                    Text(
+                                        text = "Logs / Output",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.padding(start = 12.dp, top = 12.dp, end = 12.dp, bottom = 4.dp)
+                                    )
+                                    
+                                    val listState = rememberLazyListState()
+                                    LaunchedEffect(logs.size) {
+                                        if (logs.isNotEmpty()) {
+                                            listState.animateScrollToItem(logs.size - 1)
+                                        }
+                                    }
+
+                                    LazyColumn(
+                                        state = listState,
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 12.dp, vertical = 4.dp)
+                                    ) {
+                                        items(logs) { log ->
+                                            Text(
+                                                text = log,
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.padding(vertical = 4.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    override fun onDestroy() {
+        stopMediaPlayer()
+        languageDetector?.close()
+        super.onDestroy()
+    }
+
+    private fun stopMediaPlayer() {
+        mediaPlayer?.stop()
+        mediaPlayer?.release()
+        mediaPlayer = null
+    }
+
+    private fun onClickPlay() {
+        val filename = application.filesDir.absolutePath + "/generated.wav"
+        stopMediaPlayer()
+        mediaPlayer = MediaPlayer.create(
+            applicationContext,
+            Uri.fromFile(File(filename))
+        )
+        mediaPlayer?.start()
+    }
+
+    private fun onClickStop() {
+        stopped = true
+        track.pause()
+        track.flush()
+
+        stopMediaPlayer()
+    }
+
+    // this function is called from C++
+    private fun callback(samples: FloatArray): Int {
+        if (!stopped) {
+            val processed = activeResampler?.process(samples) ?: samples
+            val samplesCopy = processed.copyOf()
+            val currentRate = activeSampleRate
+            scope.launch {
+                Log.i(TAG, "callback called with ${samplesCopy.count()} samples")
+                val ok = samplesChannel.trySend(AudioChunk(samplesCopy, currentRate)).isSuccess
+                Log.i(TAG, "callback called with $ok")
+            }
+            return 1
+        } else {
+            track.stop()
+            Log.i(TAG, " return 0")
+            return 0
+        }
+    }
+
+    private fun initAudioTrack() {
+        if (::track.isInitialized) {
+            try {
+                track.stop()
+                track.release()
+            } catch (e: Exception) {
+                Log.e(TAG, "Error releasing old AudioTrack", e)
+            }
+        }
+        val sampleRate = TtsEngine.tts?.sampleRate() ?: 22050
+        val bufLength = AudioTrack.getMinBufferSize(
+            sampleRate,
+            AudioFormat.CHANNEL_OUT_MONO,
+            AudioFormat.ENCODING_PCM_FLOAT
+        )
+        Log.i(TAG, "sampleRate: $sampleRate, buffLength: $bufLength")
+
+        val attr = AudioAttributes.Builder().setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+            .setUsage(AudioAttributes.USAGE_MEDIA)
+            .build()
+
+        val format = AudioFormat.Builder()
+            .setEncoding(AudioFormat.ENCODING_PCM_FLOAT)
+            .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+            .setSampleRate(sampleRate)
+            .build()
+
+        track = AudioTrack(
+            attr, format, bufLength, AudioTrack.MODE_STREAM,
+            AudioManager.AUDIO_SESSION_ID_GENERATE
+        )
+        track.play()
+    }
+}

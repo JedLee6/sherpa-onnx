@@ -1,0 +1,25 @@
+<resources>
+    <string name="app_name">Supertonic TTS Engine</string>
+    <string name="app_bar_title">Supertonic TTS Engine</string>
+    <string name="model_label">Modell</string>
+    <string name="speed_label">Geschwindigkeit %1$.1f</string>
+    <string name="language_label">Sprache</string>
+    <string name="speaker_id_label">Sprecher-ID: (0-%1$d)</string>
+    <string name="input_label">Bitte geben Sie hier Ihren Text ein</string>
+    <string name="btn_start">Starten</string>
+    <string name="btn_play">Abspielen</string>
+    <string name="btn_stop">Stoppen</string>
+    <string name="btn_save">Speichern</string>
+    <string name="btn_share">Teilen</string>
+    <string name="sub_sentences_label">Teilsätze und Sprachen:\n%1$s</string>
+    <string name="toast_audio_saved">Audio gespeichert</string>
+    <string name="toast_audio_save_failed">Fehler beim Speichern von Audio</string>
+    <string name="toast_no_audio_to_share">Kein Audio zum Teilen vorhanden</string>
+    <string name="toast_model_missing_files">Modell \'%1$s\' vermisst benötigte Dateien und kann nicht geladen werden.</string>
+    <string name="toast_please_input_text">Bitte geben Sie Text zur Generierung ein</string>
+    <string name="toast_tts_initializing">TTS-Engine wird initialisiert, bitte warten...</string>
+    <string name="toast_tts_initialized">TTS-Engine erfolgreich initialisiert!</string>
+    <string name="toast_tts_failed">Initialisierung der TTS-Engine fehlgeschlagen.</string>
+    <string name="voice_speaker_label">Stimme / Sprecher</string>
+    <string name="rtf_format">Anzahl der Threads: %1$d\nVergangen: %2$.3f s\nAudiodauer: %3$.3f s\nRTF: %4$.3f/%5$.3f = %6$.3f</string>
+</resources>
