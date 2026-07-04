@@ -115,6 +115,7 @@ class MainActivity : ComponentActivity() {
     private var samplesChannel = Channel<AudioChunk>(capacity = 128)
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var activeResampler: RealtimeResampler? = null
+    private var activeSpeedChanger: AudioSpeedChanger? = null
     private var activeSampleRate: Int = 22050
 
 
@@ -522,8 +523,9 @@ class MainActivity : ComponentActivity() {
                                                                    null
                                                                }
                                                                val targetSpeed = TtsEngine.speed
+                                                               activeSpeedChanger = if (targetSpeed != 1.0f) AudioSpeedChanger(activeSampleRate, targetSpeed) else null
                                                                Log.i(TAG, "Sentence loop debug - sentence: '$sentence', selectedTts: $selectedTts, nativeRate: $nativeRate, generatorRate: $generatorRate, factor: $factor, activeResampler: $activeResampler, speed: ${TtsEngine.speed}, targetSpeed: $targetSpeed")
-                                                               val genConfig = GenerationConfig(sid = TtsEngine.speakerId, speed = targetSpeed)
+                                                               val genConfig = GenerationConfig(sid = TtsEngine.speakerId, speed = 1.0f)
                                                                genConfig.extra = mapOf("lang" to iso1)
 
                                                                val audio = selectedTts.generateWithConfigAndCallback(
@@ -551,8 +553,9 @@ class MainActivity : ComponentActivity() {
                                                               null
                                                           }
                                                           val targetSpeed = TtsEngine.speed
+                                                          activeSpeedChanger = if (targetSpeed != 1.0f) AudioSpeedChanger(activeSampleRate, targetSpeed) else null
                                                           Log.i(TAG, "Else branch debug - testText: '$testText', selectedTts: $selectedTts, nativeRate: $nativeRate, generatorRate: $generatorRate, factor: $factor, activeResampler: $activeResampler, speed: ${TtsEngine.speed}, targetSpeed: $targetSpeed")
-                                                          val genConfig = GenerationConfig(sid = TtsEngine.speakerId, speed = targetSpeed)
+                                                          val genConfig = GenerationConfig(sid = TtsEngine.speakerId, speed = 1.0f)
                                                           withContext(Dispatchers.Main) {
                                                               logs.add("Generating audio (lang: ${TtsEngine.lang})...")
                                                           }
@@ -572,6 +575,15 @@ class MainActivity : ComponentActivity() {
 
                                                     val elapsed =
                                                         startTime.elapsedNow().inWholeMilliseconds.toFloat() / 1000
+
+                                                    // Flush speed changer
+                                                    val flushed = activeSpeedChanger?.flush()
+                                                    if (flushed != null && flushed.isNotEmpty()) {
+                                                        allSamples.add(flushed)
+                                                        scope.launch {
+                                                            samplesChannel.send(AudioChunk(flushed, activeSampleRate))
+                                                        }
+                                                    }
 
                                                     var totalSamplesCount = 0
                                                     for (s in allSamples) totalSamplesCount += s.size
@@ -772,7 +784,8 @@ class MainActivity : ComponentActivity() {
     private fun callback(samples: FloatArray): Int {
         if (!stopped) {
             val processed = activeResampler?.process(samples) ?: samples
-            val samplesCopy = processed.copyOf()
+            val speedProcessed = activeSpeedChanger?.process(processed) ?: processed
+            val samplesCopy = speedProcessed.copyOf()
             val currentRate = activeSampleRate
             scope.launch {
                 Log.i(TAG, "callback called with ${samplesCopy.count()} samples")

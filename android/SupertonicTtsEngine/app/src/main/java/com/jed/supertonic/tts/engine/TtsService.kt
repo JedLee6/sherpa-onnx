@@ -215,10 +215,13 @@ class TtsService : TextToSpeechService() {
             null
         }
 
+        val speedChanger = if (engineSpeed != 1.0f) AudioSpeedChanger(nativeRate, engineSpeed) else null
+
         val ttsCallback: (FloatArray) -> Int = fun(floatSamples): Int {
             val processed = resampler?.process(floatSamples) ?: floatSamples
+            val speedProcessed = speedChanger?.process(processed) ?: processed
             // convert FloatArray to ByteArray
-            val samples = floatArrayToByteArray(processed)
+            val samples = floatArrayToByteArray(speedProcessed)
             val maxBufferSize: Int = callback.maxBufferSize
             var offset = 0
             while (offset < samples.size) {
@@ -234,7 +237,7 @@ class TtsService : TextToSpeechService() {
 
         val targetSpeed = engineSpeed
         Log.i(TAG, "TtsService debug - text: '$text', selectedTts: $selectedTts, nativeRate: $nativeRate, generatorRate: $generatorRate, factor: $factor, resampler: $resampler, engineSpeed: $engineSpeed, targetSpeed: $targetSpeed")
-        val genConfig = GenerationConfig(sid = TtsEngine.speakerId, speed = targetSpeed)
+        val genConfig = GenerationConfig(sid = TtsEngine.speakerId, speed = 1.0f)
         genConfig.extra = mapOf("lang" to iso1)
 
         selectedTts.generateWithConfigAndCallback(
@@ -242,6 +245,18 @@ class TtsService : TextToSpeechService() {
             config = genConfig,
             callback = ttsCallback,
         )
+
+        val flushed = speedChanger?.flush()
+        if (flushed != null && flushed.isNotEmpty()) {
+            val samples = floatArrayToByteArray(flushed)
+            val maxBufferSize: Int = callback.maxBufferSize
+            var offset = 0
+            while (offset < samples.size) {
+                val bytesToWrite = Math.min(maxBufferSize, samples.size - offset)
+                callback.audioAvailable(samples, offset, bytesToWrite)
+                offset += bytesToWrite
+            }
+        }
 
         callback.done()
     }
