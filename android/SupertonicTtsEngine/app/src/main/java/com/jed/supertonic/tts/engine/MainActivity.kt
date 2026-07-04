@@ -77,7 +77,7 @@ import com.google.mediapipe.tasks.text.languagedetector.LanguageDetector.Languag
 
 const val TAG = "sherpa-onnx-tts-engine"
 
-class AudioChunk(val samples: FloatArray, val sampleRate: Int)
+class AudioChunk(val samples: FloatArray, val sampleRate: Int, val isEof: Boolean = false)
 
 data class VoiceOption(
     val id: Int,
@@ -440,8 +440,11 @@ class MainActivity : ComponentActivity() {
                                                 scope.launch {
                                                     for (chunk in samplesChannel) {
                                                         val samples = chunk.samples
-                                                        if (samples.isEmpty()) {
+                                                        if (chunk.isEof) {
                                                             break
+                                                        }
+                                                        if (samples.isEmpty()) {
+                                                            continue
                                                         }
 
                                                         if (track.playbackRate != chunk.sampleRate) {
@@ -540,6 +543,13 @@ class MainActivity : ComponentActivity() {
                                                                }
                                                                val speedProcessed = AudioSpeedChanger.oneShotProcess(processedSamples, activeSampleRate, targetSpeed)
                                                                allSamples.add(speedProcessed)
+
+                                                               val flushed = activeSpeedChanger?.flush()
+                                                               if (flushed != null && flushed.isNotEmpty()) {
+                                                                   scope.launch {
+                                                                       samplesChannel.send(AudioChunk(flushed, activeSampleRate))
+                                                                   }
+                                                               }
                                                           }
                                                      } else {
                                                           val selectedTts = TtsEngine.tts!!
@@ -573,18 +583,17 @@ class MainActivity : ComponentActivity() {
                                                           }
                                                           val speedProcessed = AudioSpeedChanger.oneShotProcess(processedSamples, activeSampleRate, targetSpeed)
                                                           allSamples.add(speedProcessed)
+
+                                                          val flushed = activeSpeedChanger?.flush()
+                                                          if (flushed != null && flushed.isNotEmpty()) {
+                                                              scope.launch {
+                                                                  samplesChannel.send(AudioChunk(flushed, activeSampleRate))
+                                                              }
+                                                          }
                                                      }
 
                                                     val elapsed =
                                                         startTime.elapsedNow().inWholeMilliseconds.toFloat() / 1000
-
-                                                    // activeSpeedChanger was already flushed inside callback if it was called, but here we don't need to flush it to allSamples because we used oneShotProcess for allSamples.
-                                                    val flushed = activeSpeedChanger?.flush()
-                                                    if (flushed != null && flushed.isNotEmpty()) {
-                                                        scope.launch {
-                                                            samplesChannel.send(AudioChunk(flushed, activeSampleRate))
-                                                        }
-                                                    }
 
                                                     var totalSamplesCount = 0
                                                     for (s in allSamples) totalSamplesCount += s.size
@@ -608,9 +617,9 @@ class MainActivity : ComponentActivity() {
                                                      )
 
                                                     scope.launch {
-                                                        Log.i(TAG, "send 0 samples")
-                                                             samplesChannel.send(AudioChunk(FloatArray(0), 22050))
-                                                        Log.i(TAG, "send 0 samples done")
+                                                        Log.i(TAG, "send EOF samples")
+                                                        samplesChannel.send(AudioChunk(FloatArray(0), 22050, isEof = true))
+                                                        Log.i(TAG, "send EOF samples done")
                                                     }
 
                                                     val filename =
