@@ -50,4 +50,17 @@ class AudioSpeedChanger(val sampleRate: Int, val speed: Float) {
         }
         return outFloatArray
     }
+
+    companion object {
+        fun oneShotProcess(inputSamples: FloatArray, sampleRate: Int, speed: Float): FloatArray {
+            if (speed == 1.0f || inputSamples.isEmpty()) return inputSamples
+            val changer = AudioSpeedChanger(sampleRate, speed)
+            val p1 = changer.process(inputSamples)
+            val p2 = changer.flush()
+            val combined = FloatArray(p1.size + p2.size)
+            p1.copyInto(combined, 0)
+            p2.copyInto(combined, p1.size)
+            return combined
+        }
+    }
 }

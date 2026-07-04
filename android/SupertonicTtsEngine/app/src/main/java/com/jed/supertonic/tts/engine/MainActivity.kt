@@ -538,7 +538,8 @@ class MainActivity : ComponentActivity() {
                                                                } else {
                                                                    audio.samples
                                                                }
-                                                               allSamples.add(processedSamples)
+                                                               val speedProcessed = AudioSpeedChanger.oneShotProcess(processedSamples, activeSampleRate, targetSpeed)
+                                                               allSamples.add(speedProcessed)
                                                           }
                                                      } else {
                                                           val selectedTts = TtsEngine.tts!!
@@ -570,16 +571,16 @@ class MainActivity : ComponentActivity() {
                                                           } else {
                                                               audio.samples
                                                           }
-                                                           allSamples.add(processedSamples)
+                                                          val speedProcessed = AudioSpeedChanger.oneShotProcess(processedSamples, activeSampleRate, targetSpeed)
+                                                          allSamples.add(speedProcessed)
                                                      }
 
                                                     val elapsed =
                                                         startTime.elapsedNow().inWholeMilliseconds.toFloat() / 1000
 
-                                                    // Flush speed changer
+                                                    // activeSpeedChanger was already flushed inside callback if it was called, but here we don't need to flush it to allSamples because we used oneShotProcess for allSamples.
                                                     val flushed = activeSpeedChanger?.flush()
                                                     if (flushed != null && flushed.isNotEmpty()) {
-                                                        allSamples.add(flushed)
                                                         scope.launch {
                                                             samplesChannel.send(AudioChunk(flushed, activeSampleRate))
                                                         }
